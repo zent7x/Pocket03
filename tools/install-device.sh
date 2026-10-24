@@ -19,12 +19,24 @@ xcrun devicectl list devices --json-output "$DEVICE_JSON" >/dev/null 2>&1
 # xcodebuild addresses the phone by its hardware UDID; devicectl by its CoreDevice identifier.
 DEVICE_INFO="$(python3 - "$DEVICE_JSON" <<'PYEOF'
 import json, sys
+# Only real hardware: simulators also report as paired, and picking one silently builds for
+# the wrong platform. Prefer a device with a live tunnel.
+cands = []
 for d in json.load(open(sys.argv[1]))["result"]["devices"]:
     conn = d.get("connectionProperties", {})
     hw = d.get("hardwareProperties", {})
-    if conn.get("pairingState") == "paired" and conn.get("tunnelState") != "unavailable":
-        print(hw.get("udid", ""), d.get("identifier", ""), hw.get("marketingName", "iPhone"))
-        break
+    if hw.get("reality") != "physical":
+        continue
+    if hw.get("platform") != "iOS":
+        continue
+    if conn.get("pairingState") != "paired":
+        continue
+    rank = 0 if conn.get("tunnelState") == "connected" else 1
+    cands.append((rank, hw.get("udid", ""), d.get("identifier", ""), hw.get("marketingName", "iPhone")))
+cands.sort()
+if cands:
+    _, udid, ident, name = cands[0]
+    print(udid, ident, name)
 PYEOF
 )"
 
