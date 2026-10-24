@@ -24,26 +24,26 @@ enum Film: String, CaseIterable, Codable, Identifiable {
         switch self {
         // Soft, hazy and warm. Highlights bloom out; detail is gentle rather than noisy.
         case .dreamy, .daydream:
-            return Treatment(softness: 1.9, saturation: 0.82, contrast: 0.94, brightness: 0.055,
+            return Treatment(softness: 1.9, bayer: 2.2, saturation: 0.82, contrast: 0.94, brightness: 0.055,
                              tint: CIVector(x: 0.055, y: 0.018, z: -0.035, w: 0),
-                             bloom: 0.55, levels: 18, grain: 0.28, blackPoint: 0.03,
+                             bloom: 0.30, blooming: 1.0, levels: 18, grain: 0.28, blackPoint: 0.03,
                              banding: 0.03, vignette: 0.45, highlightRoll: 0.35)
         // Cool green cast, crushed blacks and the coarse sensor noise these were known for.
         case .nokia2630, .dusk:
-            return Treatment(softness: 1.5, saturation: 0.72, contrast: 1.38, brightness: -0.065,
+            return Treatment(softness: 1.5, bayer: 3.0, saturation: 0.72, contrast: 1.38, brightness: -0.065,
                              tint: CIVector(x: -0.045, y: 0.022, z: 0.05, w: 0),
-                             bloom: 0.08, levels: 11, grain: 0.80, blackPoint: 0.14,
+                             bloom: 0.08, blooming: 0.35, levels: 11, grain: 0.80, blackPoint: 0.14,
                              banding: 0.10, vignette: 0.68, highlightRoll: 0.08)
         // The softest and most posterised: loud colour, very little real detail left.
         case .siemensCX70, .candy:
-            return Treatment(softness: 2.7, saturation: 1.5, contrast: 1.16, brightness: 0.02,
+            return Treatment(softness: 2.7, bayer: 4.2, saturation: 1.5, contrast: 1.16, brightness: 0.02,
                              tint: CIVector(x: 0.06, y: -0.025, z: 0.04, w: 0),
-                             bloom: 0.18, levels: 8, grain: 0.52, blackPoint: 0.08,
+                             bloom: 0.18, blooming: 0.5, levels: 8, grain: 0.52, blackPoint: 0.08,
                              banding: 0.08, vignette: 0.55, highlightRoll: 0.18)
         case .mono:
-            return Treatment(softness: 1.8, saturation: 0, contrast: 1.25, brightness: 0.0,
+            return Treatment(softness: 1.8, bayer: 1.0, saturation: 0, contrast: 1.25, brightness: 0.0,
                              tint: CIVector(x: 0.02, y: 0.02, z: 0.02, w: 0),
-                             bloom: 0.12, levels: 14, grain: 0.6, blackPoint: 0.10,
+                             bloom: 0.12, blooming: 0.4, levels: 14, grain: 0.6, blackPoint: 0.10,
                              banding: 0.06, vignette: 0.6, highlightRoll: 0.15)
         }
     }
@@ -51,11 +51,13 @@ enum Film: String, CaseIterable, Codable, Identifiable {
 
 struct Treatment {
     let softness: Double      // resolution thrown away before being scaled back up
+    let bayer: Double         // chroma smearing from a colour filter array and its demosaic
     let saturation: Double
     let contrast: Double
     let brightness: Double
     let tint: CIVector
     let bloom: Double
+    let blooming: Double      // charge bleeding out of clipped highlights
     let levels: Double        // posterisation steps
     let grain: Double
     let blackPoint: Double    // where the shadows get crushed to pure black
@@ -93,14 +95,24 @@ final class RetroProcessor {
                 .transformed(by: CGAffineTransform(scaleX: treatment.softness, y: treatment.softness))
                 .cropped(to: rect)
         }
-
+        // 2. Colour filter array. A Bayer sensor samples green twice as often as red and blue,
+        //    and the demosaic guesses the rest -- so chroma carries far less real detail than
+        //    luma, and colour smears across edges. Keep green sharp, blur red and blue, recombine.
+        if treatment.bayer > 1 {
+            let chroma = output.clampedToExtent()
+                .applyingFilter("CIGaussianBlur", parameters: [kCIInputRadiusKey: treatment.bayer])
+                .cropped(to: rect)
+            // Luminance from the sharp image, hue and saturation from the blurred one. Splitting
+            // the channels and re-adding them is not exposure neutral; this is.
+            output = output.applyingFilter("CILuminosityBlendMode", parameters: [
+                kCIInputBackgroundImageKey: chroma]).cropped(to: rect)
+        }
         // 2. Colour grade.
         output = output.applyingFilter("CIColorControls", parameters: [
             kCIInputSaturationKey: treatment.saturation, kCIInputContrastKey: treatment.contrast,
             kCIInputBrightnessKey: treatment.brightness
         ])
         output = output.applyingFilter("CIColorMatrix", parameters: ["inputBiasVector": treatment.tint])
-
         // 3. Crush the blacks and let the highlights go. Small sensors clipped at both ends
         //    and never recovered either.
         let knee = 1.0 - treatment.highlightRoll * 0.45
@@ -112,11 +124,34 @@ final class RetroProcessor {
             "inputPoint3": CIVector(x: knee, y: 0.94),
             "inputPoint4": CIVector(x: 1, y: 1)
         ])
-
         output = output.applyingFilter("CIBloom", parameters: [
             kCIInputRadiusKey: 6.5, kCIInputIntensityKey: treatment.bloom]).cropped(to: rect)
+        // Blooming: charge spilling out of saturated wells. Isolate what is already clipping,
+        // spread it wide, and screen it back so bright areas eat into their neighbours.
+        if treatment.blooming > 0 {
+            let gain: CGFloat = 4.0
+            let clipped = output.applyingFilter("CIColorMatrix", parameters: [
+                "inputBiasVector": CIVector(x: -0.84, y: -0.84, z: -0.84, w: 0)])
+                .applyingFilter("CIColorClamp", parameters: [
+                    "inputMinComponents": CIVector(x: 0, y: 0, z: 0, w: 1),
+                    "inputMaxComponents": CIVector(x: 1, y: 1, z: 1, w: 1)])
+                .applyingFilter("CIColorMatrix", parameters: [
+                    "inputRVector": CIVector(x: gain, y: 0, z: 0, w: 0),
+                    "inputGVector": CIVector(x: 0, y: gain, z: 0, w: 0),
+                    "inputBVector": CIVector(x: 0, y: 0, z: gain, w: 0)])
+                .applyingFilter("CIColorControls", parameters: [
+                    kCIInputBrightnessKey: 0, kCIInputContrastKey: 1, kCIInputSaturationKey: 0.4])
+            let spread = clipped.clampedToExtent()
+                .applyingFilter("CIGaussianBlur", parameters: [kCIInputRadiusKey: 14])
+                .cropped(to: rect)
+                .applyingFilter("CIColorMatrix", parameters: [
+                    "inputRVector": CIVector(x: treatment.blooming, y: 0, z: 0, w: 0),
+                    "inputGVector": CIVector(x: 0, y: treatment.blooming, z: 0, w: 0),
+                    "inputBVector": CIVector(x: 0, y: 0, z: treatment.blooming, w: 0)])
+            output = spread.applyingFilter("CIScreenBlendMode", parameters: [
+                kCIInputBackgroundImageKey: output]).cropped(to: rect)
+        }
         output = output.applyingFilter("CIColorPosterize", parameters: ["inputLevels": treatment.levels])
-
         // 4. Noise, overlay blended. Mid grey is neutral under overlay, so grain adds texture
         //    without lifting the blacks into fog the way a straight dissolve does.
         if let random = CIFilter(name: "CIRandomGenerator")?.outputImage {
@@ -126,8 +161,18 @@ final class RetroProcessor {
             ]).applyingFilter("CIColorControls", parameters: [kCIInputSaturationKey: 0]).cropped(to: rect)
             let grained = mono.applyingFilter("CIOverlayBlendMode", parameters: [
                 kCIInputBackgroundImageKey: output]).cropped(to: rect)
+            // Dark noise: read noise is roughly constant while signal is not, so it dominates
+            // the shadows. Mask the grain by inverse luminance instead of spreading it evenly.
+            let darkness = output
+                .applyingFilter("CIColorControls", parameters: [kCIInputSaturationKey: 0])
+                .applyingFilter("CIColorInvert")
+                .applyingFilter("CIColorControls", parameters: [
+                    kCIInputContrastKey: 1.3, kCIInputBrightnessKey: -0.15])
+                .cropped(to: rect)
+            let shadowGrain = grained.applyingFilter("CIBlendWithMask", parameters: [
+                kCIInputBackgroundImageKey: output, kCIInputMaskImageKey: darkness]).cropped(to: rect)
             output = output.applyingFilter("CIDissolveTransition", parameters: [
-                kCIInputTargetImageKey: grained, kCIInputTimeKey: treatment.grain
+                kCIInputTargetImageKey: shadowGrain, kCIInputTimeKey: min(1, treatment.grain * 1.35)
             ]).cropped(to: rect)
             let rows = mono.transformed(by: CGAffineTransform(scaleX: 520, y: 1)).cropped(to: rect)
             let banded = rows.applyingFilter("CIOverlayBlendMode", parameters: [
@@ -136,7 +181,6 @@ final class RetroProcessor {
                 kCIInputTargetImageKey: banded, kCIInputTimeKey: treatment.banding
             ]).cropped(to: rect)
         }
-
         output = output.applyingFilter("CIVignette", parameters: [
             kCIInputIntensityKey: treatment.vignette * 1.6, kCIInputRadiusKey: 150])
         output = output.applyingFilter("CIDissolveTransition", parameters: [
