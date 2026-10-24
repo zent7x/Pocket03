@@ -37,10 +37,3 @@ and thermals; Photos permission prompts; native share sheet; picker selection ge
 
 Unchanged boundary: the original app's native VM filter formulas remain unrecovered. All looks,
 coefficients and artwork here are original; no pixel-perfect reproduction is claimed.
-
-## Follow-up: own screen language (24 October 2026)
-
-User asked for the UI to look *alag* -- different -- and chose an original LCD direction over the
-Series 40 styling. Rebuilt as a warm amber dot-matrix panel: near-black shell, scanlines, original
-pixel glyph set and meters, framing ticks, underlined tabs, inverted amber menu selection. Screen
-structure, accessibility identifiers and control names were kept so every flow and test survives.

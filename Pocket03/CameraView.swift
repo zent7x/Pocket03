@@ -31,9 +31,11 @@ struct CameraView: View {
     @State private var flashing = false
     @State private var exporting = false
 
+    private let ink = Color(red: 0.07, green: 0.12, blue: 0.18)
+    private let paper = Color(red: 0.79, green: 0.87, blue: 0.90)
+    private let highlight = Color(red: 0.12, green: 0.29, blue: 0.54)
     private var film: Film { Film(rawValue: selectedLook).flatMap { Film.cameraLooks.contains($0) ? $0 : nil } ?? .dreamy }
     private var busy: Bool { camera.isRecording || camera.isFinishing || importing || pendingMovie != nil }
-    private var modeIcon: PixelIcon { mode == .video ? .video : mode == .imported ? .importTray : .camera }
     private var centerTitle: String {
         if page != .camera {
             switch page {
@@ -65,15 +67,17 @@ struct CameraView: View {
                 softKeys
             }
             .frame(width: geometry.size.width, height: geometry.size.height)
-            .background(LCD.shell)
+            .background(paper, ignoresSafeAreaEdges: [])
+            .overlay(Rectangle().stroke(Color.white.opacity(0.3), lineWidth: 1).allowsHitTesting(false))
         }
-        .background(LCD.shell.ignoresSafeArea())
+        .background(Color.black.ignoresSafeArea())
         .overlay {
-            if page != .camera, let toast { toastChip(toast) }
+            if page != .camera, let toast {
+                Text(toast).font(pixel(27)).foregroundStyle(ink).padding(13).background(paper).overlay(Rectangle().stroke(highlight, lineWidth: 2))
+            }
         }
         .statusBarHidden()
-        .preferredColorScheme(.dark)
-        .tint(LCD.ink)
+        .preferredColorScheme(.light)
         .photosPicker(isPresented: $pickerPresented, selection: $pickerItem, matching: .any(of: [.images, .videos]))
         .alert("Pocket03", isPresented: Binding(get: { camera.error != nil }, set: { if !$0 { camera.error = nil } })) {
             if let movie = pendingMovie {
@@ -101,53 +105,59 @@ struct CameraView: View {
         .onDisappear { importTask?.cancel() }
     }
 
-    // MARK: - Panels
+    private func pixel(_ size: CGFloat) -> Font { .custom("VT323-Regular", size: size) }
+    private var chrome: LinearGradient { LinearGradient(colors: [Color(red: 0.87, green: 0.94, blue: 0.96), paper, Color(red: 0.68, green: 0.79, blue: 0.85)], startPoint: .topLeading, endPoint: .bottomTrailing) }
 
     private var statusBar: some View {
-        HStack(spacing: 9) {
-            LCDMeter(kind: .signal).frame(width: 15, height: 11)
-            LCDMeter(kind: .battery).frame(width: 22, height: 11)
-            PixelGlyph(icon: camera.torchOn ? .bolt : modeIcon, tint: camera.torchOn ? LCD.inkBright : LCD.inkDim)
-                .frame(height: 11)
-            if camera.isRecording {
-                Text("REC").font(LCD.type(17)).foregroundStyle(LCD.alert)
-            }
-            Spacer(minLength: 4)
-            if camera.isDemo {
-                Text("DEMO").font(LCD.type(16)).foregroundStyle(LCD.shell)
-                    .padding(.horizontal, 5).padding(.vertical, 1).background(LCD.inkDim)
-            }
-            Text(Date(), format: .dateTime.hour(.twoDigits(amPM: .omitted)).minute(.twoDigits))
-                .font(LCD.type(24)).foregroundStyle(LCD.ink)
+        HStack(spacing: 7) {
+            HStack(alignment: .bottom, spacing: 2) {
+                ForEach(0..<4) { i in Rectangle().fill(ink).frame(width: 3, height: CGFloat(4 + i * 3)) }
+            }.accessibilityHidden(true)
+            HStack(spacing: 1) { ForEach(0..<4) { _ in Rectangle().fill(Color(red: 0.17, green: 0.6, blue: 0.14)).frame(width: 3, height: 8) } }
+                .padding(2).overlay(Rectangle().stroke(ink, lineWidth: 1)).accessibilityHidden(true)
+            Image(systemName: camera.torchOn ? "bolt.fill" : "camera.fill").font(.system(size: 11)).accessibilityHidden(true)
+            if camera.isRecording { Text("REC").foregroundStyle(.red) }
+            Spacer()
+            if camera.isDemo { Text("DEMO").font(pixel(16)).foregroundStyle(highlight) }
+            Text(Date(), format: .dateTime.hour(.twoDigits(amPM: .omitted)).minute(.twoDigits)).font(pixel(26))
         }
-        .padding(.horizontal, 11).frame(height: 32)
-        .background(LCD.panel)
-        .overlay(alignment: .bottom) { Rectangle().fill(LCD.inkFaint).frame(height: 1) }
-        .scanlined(0.18)
+        .font(pixel(19)).foregroundStyle(ink).padding(.horizontal, 10).frame(height: 31).background(chrome)
+        .overlay(alignment: .bottom) { Rectangle().fill(.white.opacity(0.6)).frame(height: 1) }
     }
-
     private var modeBar: some View {
         HStack(spacing: 0) {
             ForEach(CaptureMode.allCases) { item in
-                let active = mode == item
                 Button { setMode(item) } label: {
-                    VStack(spacing: 3) {
-                        Text(item.rawValue.uppercased())
-                            .font(LCD.type(21))
-                            .foregroundStyle(active ? LCD.inkBright : LCD.inkDim)
-                        Rectangle().fill(active ? LCD.ink : .clear).frame(height: 2)
-                    }
-                    .frame(maxWidth: .infinity).frame(height: 31)
-                }
-                .buttonStyle(.plain).disabled(busy || renderingImport)
-                .accessibilityIdentifier("mode-\(item.rawValue.lowercased())")
-                .accessibilityAddTraits(active ? .isSelected : [])
+                    Text(item.rawValue).font(pixel(23)).frame(maxWidth: .infinity).frame(height: 33)
+                        .background(mode == item ? highlight : .clear).foregroundStyle(mode == item ? .white : ink)
+                }.buttonStyle(.plain).disabled(busy || renderingImport)
+                    .accessibilityIdentifier("mode-\(item.rawValue.lowercased())")
+                    .accessibilityAddTraits(mode == item ? .isSelected : [])
             }
-        }
-        .padding(.horizontal, 8)
-        .background(LCD.shell)
+        }.background(paper)
     }
-
+    private var lookSelector: some View {
+        HStack(spacing: 0) {
+            Button { cycleLook(-1) } label: { Text("◀").font(pixel(22)).frame(width: 42, height: 43) }.accessibilityLabel("Previous camera look")
+            Button { page = .looks } label: {
+                HStack(spacing: 9) {
+                    PhoneGlyph(film: film).frame(height: 36)
+                    VStack(spacing: 0) {
+                        Text(film.rawValue).font(pixel(25)).lineLimit(1).minimumScaleFactor(0.7)
+                        Text("\((Film.cameraLooks.firstIndex(of: film) ?? 0) + 1) / 3").font(pixel(14)).foregroundStyle(highlight)
+                    }
+                }.frame(maxWidth: .infinity, minHeight: 46)
+            }.accessibilityIdentifier("look-selector")
+            Button { cycleLook(1) } label: { Text("▶").font(pixel(22)).frame(width: 42, height: 43) }.accessibilityLabel("Next camera look")
+        }.foregroundStyle(ink).background(chrome).disabled(busy)
+    }
+    private var infoBar: some View {
+        HStack {
+            Text(mode == .video ? "480×640 · silent video" : mode == .imported ? "Photo & video import" : "0.3 MP · 480×640")
+            Spacer()
+            Text(String(format: "%03d", library.memories.count)).accessibilityIdentifier("gallery-count")
+        }.font(pixel(17)).foregroundStyle(highlight).padding(.horizontal, 10).frame(height: 23).background(paper)
+    }
     private var viewfinder: some View {
         GeometryReader { geometry in
             ZStack {
@@ -156,355 +166,150 @@ struct CameraView: View {
                     Image(uiImage: image).resizable().interpolation(.none).scaledToFit()
                         .frame(width: geometry.size.width, height: geometry.size.height)
                 } else {
-                    VStack(spacing: 16) {
-                        PixelGlyph(icon: mode == .imported ? .importTray : .camera, tint: LCD.inkDim)
-                            .frame(height: 30)
+                    VStack(spacing: 18) {
+                        Image(systemName: mode == .imported ? "photo.on.rectangle.angled" : "camera").font(.system(size: 32, weight: .light))
                         Text(mode == .imported ? "Import a photo or video\nChoose a look. Make it a memory." : camera.cameraMessage ?? "Starting camera…")
-                            .font(LCD.type(23)).foregroundStyle(LCD.ink).multilineTextAlignment(.center)
+                            .font(pixel(24)).multilineTextAlignment(.center)
                         if mode == .imported {
-                            Button("Open gallery") { pickerPresented = true }
-                                .font(LCD.type(24)).foregroundStyle(LCD.shell)
-                                .padding(.horizontal, 14).padding(.vertical, 7).background(LCD.ink)
+                            Button("Open gallery") { pickerPresented = true }.font(pixel(25)).padding(10).background(highlight)
                         } else if camera.cameraMessage != nil {
-                            Button("Open Settings") { if let url = URL(string: UIApplication.openSettingsURLString) { UIApplication.shared.open(url) } }
-                                .font(LCD.type(22)).foregroundStyle(LCD.ink)
+                            Button("Open Settings") { if let url = URL(string: UIApplication.openSettingsURLString) { UIApplication.shared.open(url) } }.font(pixel(23))
                         }
-                    }.padding(24)
+                    }.padding(25).foregroundStyle(.white)
                 }
-                reticle
                 if camera.isRecording {
-                    VStack {
-                        HStack {
-                            Text(String(format: "%02d:%02d", camera.recordingSeconds / 60, camera.recordingSeconds % 60))
-                                .font(LCD.type(26)).foregroundStyle(LCD.inkBright)
-                                .padding(.horizontal, 7).padding(.vertical, 2)
-                                .background(LCD.shell.opacity(0.72))
-                                .accessibilityIdentifier("recording-time")
-                            Spacer()
-                            HStack(spacing: 5) {
-                                Circle().fill(LCD.alert).frame(width: 9, height: 9)
-                                Text("REC").font(LCD.type(22)).foregroundStyle(LCD.alert)
-                            }
-                            .padding(.horizontal, 7).padding(.vertical, 2)
-                            .background(LCD.shell.opacity(0.72))
-                        }
-                        Spacer()
-                    }.padding(13)
+                    VStack { HStack {
+                        Text(String(format: "%02d:%02d", camera.recordingSeconds / 60, camera.recordingSeconds % 60))
+                            .font(pixel(28)).padding(5).background(.black.opacity(0.6)).accessibilityIdentifier("recording-time")
+                        Spacer(); Text("● REC").foregroundStyle(.red).font(pixel(24))
+                    }; Spacer() }.padding(12).foregroundStyle(.white)
                 }
                 if importing {
-                    VStack(spacing: 13) {
-                        Text(importingMovie ? "PROCESSING \(Int(importProgress * 100))%" : "LOADING PHOTO")
-                            .font(LCD.type(25)).foregroundStyle(LCD.inkBright)
-                        meter(importProgress)
-                        Text(importingMovie ? "\(film.rawValue) · silent output" : film.rawValue)
-                            .font(LCD.type(18)).foregroundStyle(LCD.inkDim)
-                        Button("Cancel") { importTask?.cancel() }
-                            .font(LCD.type(23)).foregroundStyle(LCD.shell)
-                            .padding(.horizontal, 13).padding(.vertical, 5).background(LCD.ink)
-                    }
-                    .padding(26).background(LCD.shell.opacity(0.94))
-                    .overlay(Rectangle().stroke(LCD.ink, lineWidth: 1))
+                    VStack(spacing: 14) {
+                        Text(importingMovie ? "Processing video… \(Int(importProgress * 100))%" : "Loading photo…").font(pixel(25))
+                        ProgressView(value: importProgress).tint(.white)
+                        Text(importingMovie ? "\(film.rawValue) · silent output" : film.rawValue).font(pixel(18))
+                        Button("Cancel") { importTask?.cancel() }.font(pixel(24)).padding(8)
+                    }.padding(25).foregroundStyle(.white).background(highlight.opacity(0.95))
                 } else if renderingImport || camera.isFinishing {
-                    Text(camera.isFinishing ? "SAVING VIDEO…" : "PROCESSING…")
-                        .font(LCD.type(24)).foregroundStyle(LCD.inkBright)
-                        .padding(15).background(LCD.shell.opacity(0.94))
-                        .overlay(Rectangle().stroke(LCD.ink, lineWidth: 1))
+                    Text(camera.isFinishing ? "Saving video…" : "Processing…").font(pixel(25)).padding(15).foregroundStyle(ink).background(paper)
                 }
-                if let toast { toastChip(toast) }
+                if let toast { Text(toast).font(pixel(27)).foregroundStyle(ink).padding(13).background(paper).overlay(Rectangle().stroke(highlight, lineWidth: 2)).transition(.opacity) }
                 if let movie = pendingMovie {
-                    Button("Retry saving video") { saveMovie(movie.0, thumbnail: movie.1, film: movie.2) }
-                        .font(LCD.type(24)).foregroundStyle(LCD.shell)
-                        .padding(14).background(LCD.ink)
+                    Button("Retry saving video") { saveMovie(movie.0, thumbnail: movie.1, film: movie.2) }.font(pixel(25)).padding(15).foregroundStyle(ink).background(paper)
                 }
-                if flashing { LCD.inkBright.opacity(0.9) }
-            }
-            .frame(width: geometry.size.width, height: geometry.size.height)
-            .clipped()
-            .scanlined(0.1)
+                if flashing { Color.white.opacity(0.85) }
+            }.frame(width: geometry.size.width, height: geometry.size.height).clipped()
         }
     }
-
-    // Corner ticks instead of a drawn bezel: it frames the image without imitating a phone screen.
-    private var reticle: some View {
-        GeometryReader { geo in
-            let length = min(geo.size.width, geo.size.height) * 0.07
-            let inset: CGFloat = 7
-            Path { path in
-                let rect = CGRect(x: inset, y: inset,
-                                  width: geo.size.width - inset * 2, height: geo.size.height - inset * 2)
-                for corner in [(rect.minX, rect.minY, 1.0, 1.0), (rect.maxX, rect.minY, -1.0, 1.0),
-                               (rect.minX, rect.maxY, 1.0, -1.0), (rect.maxX, rect.maxY, -1.0, -1.0)] {
-                    let (x, y, dx, dy) = (corner.0, corner.1, CGFloat(corner.2), CGFloat(corner.3))
-                    path.move(to: CGPoint(x: x + dx * length, y: y))
-                    path.addLine(to: CGPoint(x: x, y: y))
-                    path.addLine(to: CGPoint(x: x, y: y + dy * length))
-                }
-            }
-            .stroke(LCD.ink.opacity(0.65), lineWidth: 1.5)
-        }
-        .allowsHitTesting(false)
-        .accessibilityHidden(true)
-    }
-
-    private var lookSelector: some View {
-        HStack(spacing: 0) {
-            Button { cycleLook(-1) } label: {
-                PixelGlyph(icon: .arrowLeft, tint: LCD.ink).frame(height: 13).frame(width: 40, height: 48)
-            }.accessibilityLabel("Previous camera look")
-            Button { page = .looks } label: {
-                HStack(spacing: 10) {
-                    handsetChip(film, height: 34)
-                    VStack(alignment: .leading, spacing: 1) {
-                        Text(film.rawValue)
-                            .font(LCD.type(23)).foregroundStyle(LCD.inkBright)
-                            .lineLimit(1).minimumScaleFactor(0.7)
-                        Text("LOOK \((Film.cameraLooks.firstIndex(of: film) ?? 0) + 1) OF 3")
-                            .font(LCD.type(15)).foregroundStyle(LCD.inkDim)
-                    }
-                    Spacer(minLength: 0)
-                }.frame(maxWidth: .infinity, minHeight: 48)
-            }.accessibilityIdentifier("look-selector")
-            Button { cycleLook(1) } label: {
-                PixelGlyph(icon: .arrowRight, tint: LCD.ink).frame(height: 13).frame(width: 40, height: 48)
-            }.accessibilityLabel("Next camera look")
-        }
-        .background(LCD.panel)
-        .overlay(alignment: .top) { Rectangle().fill(LCD.inkFaint).frame(height: 1) }
-        .disabled(busy)
-        .scanlined(0.18)
-    }
-
-    private var infoBar: some View {
-        HStack {
-            Text(mode == .video ? "480×640 · SILENT" : mode == .imported ? "PHOTO & VIDEO IMPORT" : "0.3 MP · 480×640")
-            Spacer()
-            Text(String(format: "%03d", library.memories.count)).accessibilityIdentifier("gallery-count")
-        }
-        .font(LCD.type(16)).foregroundStyle(LCD.inkDim)
-        .padding(.horizontal, 11).frame(height: 22)
-        .background(LCD.shell)
-    }
-
     private var titleBar: some View {
-        HStack(spacing: 8) {
-            Text(page == .options ? "OPTIONS" : page == .looks ? "PROCESSING" : page == .settings ? "SETTINGS" : page == .gallery ? "GALLERY" : "MEMORY")
-                .font(LCD.type(26)).foregroundStyle(LCD.inkBright)
-            Spacer()
-        }
-        .padding(.horizontal, 13).frame(height: 36)
-        .background(LCD.panel)
-        .overlay(alignment: .bottom) {
-            VStack(spacing: 1) {
-                Rectangle().fill(LCD.ink).frame(height: 1)
-                Rectangle().fill(LCD.inkFaint).frame(height: 1)
-            }
-        }
-        .scanlined(0.18)
+        Text(page == .options ? "Options" : page == .looks ? "Processing" : page == .settings ? "Settings" : page == .gallery ? "Gallery" : "Memory")
+            .font(pixel(29)).foregroundStyle(.white).frame(maxWidth: .infinity).frame(height: 38)
+            .background(LinearGradient(colors: [highlight, Color(red: 0.23, green: 0.43, blue: 0.65)], startPoint: .top, endPoint: .bottom))
     }
-
     @ViewBuilder private var pageContents: some View {
         switch page {
         case .options:
             VStack(spacing: 0) {
-                menuRow("1", "Photo camera", icon: .camera) { setMode(.photo); page = .camera }
-                menuRow("2", "Video camera", icon: .video) { setMode(.video); page = .camera }
-                menuRow("3", "Import photo / video", icon: .importTray) { setMode(.imported); page = .camera; pickerPresented = true }
-                menuRow("4", "Processing", icon: .sliders) { page = .looks }
-                menuRow("5", "Settings", icon: .gear) { page = .settings }
-                menuRow("6", "Gallery", icon: .grid) { page = .gallery }
+                menuRow("1", "Photo camera", icon: "camera") { setMode(.photo); page = .camera }
+                menuRow("2", "Video camera", icon: "video") { setMode(.video); page = .camera }
+                menuRow("3", "Import photo / video", icon: "square.and.arrow.down") { setMode(.imported); page = .camera; pickerPresented = true }
+                menuRow("4", "Processing", icon: "slider.horizontal.3") { page = .looks }
+                menuRow("5", "Settings", icon: "gearshape") { page = .settings }
+                menuRow("6", "Gallery", icon: "photo.on.rectangle") { page = .gallery }
                 Spacer()
-                Text("POCKET03\nSmall pictures. Long memories.")
-                    .font(LCD.type(19)).foregroundStyle(LCD.inkDim)
-                    .multilineTextAlignment(.center).padding(22)
+                Text("Pocket03\nSmall pictures. Long memories.").font(pixel(21)).multilineTextAlignment(.center).foregroundStyle(highlight).padding(24)
             }
         case .looks:
             VStack(spacing: 0) {
                 ForEach(Array(Film.cameraLooks.enumerated()), id: \.element.id) { index, look in
-                    let active = film == look
                     Button { selectedLook = look.rawValue; page = .camera } label: {
                         HStack(alignment: .center, spacing: 11) {
-                            Text("\(index + 1)")
-                                .font(LCD.type(24))
-                                .foregroundStyle(active ? LCD.shell : LCD.inkDim).frame(width: 16)
-                            handsetChip(look, height: 56, inverted: active)
-                            VStack(alignment: .leading, spacing: 4) {
-                                Text(look.rawValue).font(LCD.type(26))
-                                    .foregroundStyle(active ? LCD.shell : LCD.inkBright)
-                                Text(look.subtitle).font(LCD.type(17))
-                                    .foregroundStyle(active ? LCD.shell.opacity(0.8) : LCD.inkDim)
-                            }
+                            Text("\(index + 1)").frame(width: 20)
+                            PhoneGlyph(film: look).frame(height: 58)
+                            VStack(alignment: .leading, spacing: 6) { Text(look.rawValue).font(pixel(27)); Text(look.subtitle).font(pixel(18)) }
                             Spacer(minLength: 0)
-                            if active { PixelGlyph(icon: .check, tint: LCD.shell).frame(height: 15) }
-                        }
-                        .padding(.horizontal, 13).padding(.vertical, 11)
-                        .frame(maxWidth: .infinity, alignment: .leading)
-                        .background(active ? LCD.ink : LCD.shell)
-                    }
-                    .buttonStyle(.plain).accessibilityIdentifier("look-\(index)")
-                    Rectangle().fill(LCD.inkFaint).frame(height: 1)
+                            if film == look { Text("✓") }
+                        }.padding(14).frame(maxWidth: .infinity, alignment: .leading)
+                            .foregroundStyle(film == look ? .white : ink).background(film == look ? highlight : .clear)
+                    }.buttonStyle(.plain).accessibilityIdentifier("look-\(index)")
                 }
                 Spacer()
-                Text("Recreated looks, inspired by early phone cameras.")
-                    .font(LCD.type(18)).foregroundStyle(LCD.inkDim)
-                    .multilineTextAlignment(.center).padding(20)
-            }
+                Text("Recreated looks, inspired by early phone cameras.").font(pixel(20)).foregroundStyle(highlight).multilineTextAlignment(.center).padding(22)
+            }.font(pixel(26))
         case .settings:
             VStack(spacing: 0) {
-                menuRow("1", "Switch camera", icon: .camera) { camera.flip(); page = .camera }.disabled(camera.isDemo)
-                menuRow("2", camera.torchOn ? "Torch: On" : "Torch: Off", icon: .bolt) { camera.toggleTorch() }.disabled(camera.isDemo)
-                menuRow("3", "Zoom: \(Int(camera.zoom))×", icon: .sliders) { camera.setZoom(camera.zoom >= 3 ? 1 : camera.zoom + 1) }.disabled(camera.isDemo)
-                VStack(alignment: .leading, spacing: 10) {
-                    Text("EFFECT STRENGTH  \(Int(strength * 100))%")
-                        .font(LCD.type(22)).foregroundStyle(LCD.inkBright)
-                    meter(strength)
-                    Slider(value: $strength, in: 0...1).tint(LCD.ink).accessibilityLabel("Effect strength")
-                }.padding(.horizontal, 13).padding(.vertical, 15)
+                menuRow("1", "Switch camera", icon: "arrow.triangle.2.circlepath.camera") { camera.flip(); page = .camera }.disabled(camera.isDemo)
+                menuRow("2", camera.torchOn ? "Torch: On" : "Torch: Off", icon: "bolt") { camera.toggleTorch() }.disabled(camera.isDemo)
+                menuRow("3", "Zoom: \(Int(camera.zoom))×", icon: "plus.magnifyingglass") { camera.setZoom(camera.zoom >= 3 ? 1 : camera.zoom + 1) }.disabled(camera.isDemo)
+                VStack(alignment: .leading, spacing: 12) {
+                    Text("Effect strength: \(Int(strength * 100))%").font(pixel(25))
+                    Slider(value: $strength, in: 0...1).tint(highlight).accessibilityLabel("Effect strength")
+                }.padding(17)
                 Spacer()
-                Text("Video is recorded without sound.\nPhotos stay on your iPhone until you share them.")
-                    .font(LCD.type(18)).foregroundStyle(LCD.inkDim)
-                    .multilineTextAlignment(.center).padding(20)
+                Text("Video is recorded without sound.\nPhotos stay on your iPhone until you share them.").font(pixel(21)).foregroundStyle(highlight).multilineTextAlignment(.center).padding(22)
             }
         case .gallery:
             if library.memories.isEmpty {
-                VStack(spacing: 17) {
-                    PixelGlyph(icon: .grid, tint: LCD.inkFaint).frame(height: 34)
-                    Text("No images or videos.\nCapture or import a memory.")
-                        .font(LCD.type(23)).foregroundStyle(LCD.inkDim).multilineTextAlignment(.center)
-                }.padding(.top, 70).frame(maxWidth: .infinity)
+                VStack(spacing: 20) { Image(systemName: "photo.on.rectangle").font(.system(size: 40)); Text("No images or videos.\nCapture or import a memory.").font(pixel(25)).multilineTextAlignment(.center) }.padding(.top, 80).foregroundStyle(highlight)
             } else {
                 ScrollView {
-                    LazyVGrid(columns: [GridItem(.flexible()), GridItem(.flexible())], spacing: 13) {
+                    LazyVGrid(columns: [GridItem(.flexible()), GridItem(.flexible())], spacing: 12) {
                         ForEach(library.memories) { memory in
                             Button { openMemory(memory) } label: {
-                                VStack(alignment: .leading, spacing: 5) {
-                                    if let image = library.thumbnail(memory) {
-                                        Image(uiImage: image).resizable().interpolation(.none)
-                                            .aspectRatio(3 / 4, contentMode: .fit)
-                                            .overlay(Rectangle().stroke(LCD.inkDim, lineWidth: 1))
-                                    }
-                                    HStack(spacing: 5) {
-                                        PixelGlyph(icon: memory.isVideo ? .play : .still, tint: LCD.ink).frame(height: 11)
-                                        Text(memory.isVideo ? "VIDEO" : "IMAGE")
-                                            .font(LCD.type(19)).foregroundStyle(LCD.ink)
-                                    }
-                                    Text(memory.date, format: .dateTime.day().month())
-                                        .font(LCD.type(16)).foregroundStyle(LCD.inkDim)
-                                }
+                                VStack(alignment: .leading, spacing: 4) {
+                                    if let image = library.thumbnail(memory) { Image(uiImage: image).resizable().interpolation(.none).aspectRatio(3 / 4, contentMode: .fit).border(.white, width: 2) }
+                                    Text(memory.isVideo ? "▶ Video" : "▣ Image").font(pixel(22))
+                                    Text(memory.date, format: .dateTime.day().month()).font(pixel(18))
+                                }.foregroundStyle(ink)
                             }.buttonStyle(.plain).accessibilityIdentifier("memory-\(memory.id)")
                         }
-                    }.padding(13)
+                    }.padding(12)
                 }
             }
         case .viewer:
             if let memory = selectedMemory {
-                VStack(spacing: 11) {
-                    if memory.isVideo {
-                        VideoPlayer(player: player).aspectRatio(3 / 4, contentMode: .fit)
-                    } else if let image = library.thumbnail(memory) {
-                        Image(uiImage: image).resizable().interpolation(.none).aspectRatio(3 / 4, contentMode: .fit)
-                    }
-                    Text(memory.film.rawValue).font(LCD.type(24)).foregroundStyle(LCD.inkBright)
-                    Text(memory.isVideo ? "480×640 · SILENT VIDEO" : "480×640 · JPEG")
-                        .font(LCD.type(17)).foregroundStyle(LCD.inkDim)
-                    ShareLink(item: library.url(memory)) {
-                        Text("Send / Share").font(LCD.type(24)).foregroundStyle(LCD.shell)
-                            .padding(.horizontal, 15).padding(.vertical, 7).background(LCD.ink)
-                    }
+                VStack(spacing: 12) {
+                    if memory.isVideo { VideoPlayer(player: player).aspectRatio(3 / 4, contentMode: .fit) }
+                    else if let image = library.thumbnail(memory) { Image(uiImage: image).resizable().interpolation(.none).aspectRatio(3 / 4, contentMode: .fit) }
+                    Text(memory.film.rawValue).font(pixel(25))
+                    Text(memory.isVideo ? "480×640 · silent video" : "480×640 · JPEG").font(pixel(19))
+                    ShareLink(item: library.url(memory)) { Text("Send / Share").font(pixel(26)).padding(10) }
                     Spacer(minLength: 0)
-                }.padding(13)
+                }.padding(12).foregroundStyle(ink)
             }
         case .camera: EmptyView()
         }
     }
-
-    private var softKeys: some View {
-        HStack(spacing: 0) {
-            let leftTitle = page == .camera ? "Gallery" : "Camera"
-            Button { leftKey() } label: { softKeyLabel(leftTitle, emphasis: false) }
-                .accessibilityIdentifier("memories").accessibilityLabel(leftTitle)
-                .disabled(busy || renderingImport)
-            Rectangle().fill(LCD.inkFaint).frame(width: 1, height: 30)
-            Button { centerKey() } label: { softKeyLabel(centerTitle, emphasis: true) }
-                .accessibilityIdentifier("shutter").accessibilityLabel(centerTitle)
-                .disabled(centerDisabled)
-            Rectangle().fill(LCD.inkFaint).frame(width: 1, height: 30)
-            let rightTitle = page == .camera ? "Options" : "Back"
-            Button { rightKey() } label: { softKeyLabel(rightTitle, emphasis: false) }
-                .accessibilityIdentifier("options").accessibilityLabel(rightTitle)
-                .disabled(busy || renderingImport)
-        }
-        .buttonStyle(.plain)
-        .background(LCD.panel)
-        .overlay(alignment: .top) { Rectangle().fill(LCD.inkFaint).frame(height: 1) }
-        .scanlined(0.18)
-    }
-
-    // MARK: - Pieces
-
-    private func softKeyLabel(_ text: String, emphasis: Bool) -> some View {
-        Text(text.uppercased())
-            .font(LCD.type(emphasis ? 28 : 22))
-            .foregroundStyle(emphasis ? LCD.inkBright : LCD.ink)
-            .frame(maxWidth: .infinity).frame(height: 52)
-    }
-
-    private func menuRow(_ number: String, _ title: String, icon: PixelIcon, action: @escaping () -> Void) -> some View {
+    private func menuRow(_ number: String, _ title: String, icon: String, action: @escaping () -> Void) -> some View {
         Button(action: action) {
             HStack(spacing: 12) {
-                Text(number).font(LCD.type(23)).foregroundStyle(LCD.inkDim).frame(width: 16)
-                PixelGlyph(icon: icon, tint: LCD.ink).frame(height: 15)
-                Text(title).font(LCD.type(25)).foregroundStyle(LCD.inkBright)
-                Spacer(minLength: 0)
-                PixelGlyph(icon: .chevron, tint: LCD.inkFaint).frame(height: 13)
-            }
-            .padding(.horizontal, 13).frame(minHeight: 50)
-            .background(LCD.shell)
-            .overlay(alignment: .bottom) { Rectangle().fill(LCD.inkFaint).frame(height: 1) }
+                Text(number).font(pixel(25)).foregroundStyle(highlight).frame(width: 20)
+                Image(systemName: icon).font(.system(size: 17)).frame(width: 23)
+                Text(title).font(pixel(27)); Spacer(minLength: 0)
+                Text("›").font(pixel(27))
+            }.foregroundStyle(ink).padding(.horizontal, 12).frame(minHeight: 53)
+                .background(page == .options && number == "1" ? Color.white.opacity(0.7) : Color.white.opacity(0.18))
+                .overlay(alignment: .bottom) { Rectangle().fill(highlight.opacity(0.15)).frame(height: 1) }
         }.buttonStyle(.plain)
     }
-
-    // The handset picture sits on a lifted plate so a dark phone still reads against the panel.
-    private func handsetChip(_ look: Film, height: CGFloat, inverted: Bool = false) -> some View {
-        PhoneGlyph(film: look)
-            .frame(height: height - 8)
-            .padding(4)
-            .background(inverted ? LCD.shell.opacity(0.18) : LCD.panelLift)
-            .overlay(Rectangle().stroke(inverted ? LCD.shell.opacity(0.35) : LCD.inkFaint, lineWidth: 1))
-            .frame(height: height)
+    private var softKeys: some View {
+        HStack(spacing: 0) {
+            Button { leftKey() } label: { Text(page == .camera ? "Gallery" : "Camera").font(pixel(26)).frame(maxWidth: .infinity, minHeight: 54) }
+                .accessibilityIdentifier("memories").disabled(busy || renderingImport)
+            Button { centerKey() } label: { Text(centerTitle).font(pixel(32)).frame(maxWidth: .infinity, minHeight: 54) }
+                .accessibilityIdentifier("shutter").disabled(centerDisabled)
+            Button { rightKey() } label: { Text(page == .camera ? "Options" : "Back").font(pixel(26)).frame(maxWidth: .infinity, minHeight: 54) }
+                .accessibilityIdentifier("options").disabled(busy || renderingImport)
+        }.buttonStyle(.plain).foregroundStyle(ink).background(chrome)
+            .overlay(alignment: .top) { Rectangle().fill(.white.opacity(0.7)).frame(height: 1) }
     }
-
-    private func meter(_ value: Double) -> some View {
-        GeometryReader { geo in
-            let cells = 20
-            let gap: CGFloat = 2
-            let cellWidth = (geo.size.width - gap * CGFloat(cells - 1)) / CGFloat(cells)
-            let filled = Int((Double(cells) * min(1, max(0, value))).rounded())
-            HStack(spacing: gap) {
-                ForEach(0..<cells, id: \.self) { index in
-                    Rectangle().fill(index < filled ? LCD.ink : LCD.inkFaint).frame(width: cellWidth)
-                }
-            }
-        }
-        .frame(height: 9)
-        .accessibilityHidden(true)
-    }
-
-    private func toastChip(_ text: String) -> some View {
-        Text(text).font(LCD.type(25)).foregroundStyle(LCD.shell)
-            .padding(.horizontal, 15).padding(.vertical, 9)
-            .background(LCD.ink)
-            .transition(.opacity)
-    }
-
     private var centerDisabled: Bool {
         if page == .viewer { return exporting }
         if page != .camera { return busy || renderingImport || (page == .gallery && library.memories.isEmpty) }
         if camera.isRecording { return false }
         return busy || renderingImport || (mode != .imported && camera.preview == nil)
     }
-
-    // MARK: - Actions
-
     private func leftKey() { page = page == .camera ? .gallery : .camera }
     private func rightKey() { page = page == .camera ? .options : page == .viewer ? .gallery : .camera }
     private func setMode(_ newMode: CaptureMode) { guard !busy, !renderingImport else { return }; mode = newMode }
