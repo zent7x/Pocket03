@@ -31,8 +31,11 @@ for d in json.load(open(sys.argv[1]))["result"]["devices"]:
         continue
     if conn.get("pairingState") != "paired":
         continue
-    rank = 0 if conn.get("tunnelState") == "connected" else 1
-    cands.append((rank, hw.get("udid", ""), d.get("identifier", ""), hw.get("marketingName", "iPhone")))
+    # A paired but unplugged phone still appears here; xcodebuild cannot target it, so skip it
+    # and say so rather than failing later with an opaque destination error.
+    if conn.get("tunnelState") != "connected":
+        continue
+    cands.append((0, hw.get("udid", ""), d.get("identifier", ""), hw.get("marketingName", "iPhone")))
 cands.sort()
 if cands:
     _, udid, ident, name = cands[0]
@@ -45,8 +48,10 @@ DEVICE_ID="$(printf '%s' "$DEVICE_INFO" | cut -d' ' -f2)"
 DEVICE_NAME="$(printf '%s' "$DEVICE_INFO" | cut -d' ' -f3-)"
 
 if [ -z "$UDID" ]; then
-    echo "No available paired device." >&2
-    echo "Plug the iPhone in, unlock it, and tap Trust if prompted." >&2
+    echo "No connected iPhone." >&2
+    echo "The phone may be paired but not attached. Plug it in over USB (or join the same" >&2
+    echo "Wi-Fi network), unlock it, and run this again." >&2
+    xcrun devicectl list devices 2>/dev/null | grep -i physical >&2 || true
     exit 1
 fi
 echo "    $DEVICE_NAME ($UDID)"
