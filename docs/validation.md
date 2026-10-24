@@ -94,3 +94,21 @@ also carries EXIF orientation 6 and must be transposed before any cropping.
 
 Verified after the change: full suite green (11 unit/integration, 2 UI), and the selector and
 Processing list were inspected at rest in the simulator.
+
+## Interface rebuild (24 October 2026)
+
+The interface was rebuilt in Pocket03's own screen language, replacing the pale blue Series 40
+styling. It is now a warm amber dot-matrix panel on near-black with raster scanlines, an original
+pixel glyph set (`LCDTheme.swift`), drawn segmented battery and signal meters, framing ticks in
+place of a bezel, underlined workflow tabs and inverted amber row selection in the menus.
+
+Screen structure, every accessibility identifier and every spoken control name were deliberately
+left unchanged, so the capture, recording, import, gallery and export flows and their tests carry
+over untouched. Soft keys render uppercase but expose their proper-case name through an explicit
+accessibility label, which is both better for VoiceOver than letter-by-letter caps and keeps the
+label assertions stable. Look names keep their real casing because they are proper nouns.
+
+Verified after the rebuild: full suite green (11 unit/integration, 2 UI), unsigned arm64 Release
+device build succeeds, and all seven screens were captured at rest in the simulator -- camera,
+import, options, processing, settings, gallery and active recording. `preview-phone.png` was
+regenerated from the new interface.

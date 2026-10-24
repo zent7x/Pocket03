@@ -6,7 +6,9 @@ A native iPhone camera for small, imperfect memories. SwiftUI + AVFoundation + C
 
 ## Features
 
-- A Series 40 style interface with pixel type, pale blue status/menu bars and **Gallery / Capture / Options** soft keys.
+- Pocket03's own dot-matrix interface: a warm amber panel on near-black, scanlines, an original pixel glyph set,
+  framing ticks around the viewfinder and **Gallery / Capture / Options** soft keys. The palette, glyphs and meters
+  are all drawn for this app; it is deliberately not a Series 40 pastiche.
 - Three camera looks: **Dreamy (original)**, **Nokia 2630 (2007)** and **Siemens CX70 (2004)**, each shown with a handset
   picture in the look selector and the Processing menu. These are new approximations, not the original app's protected formulas.
 - Visible **Photo / Video / Import** workflow tabs. All three looks work with photos, recordings, imported photos and imported clips.
