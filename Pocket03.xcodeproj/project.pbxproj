@@ -189,6 +189,10 @@
 				BuildIndependentTargetsInParallel = YES;
 				LastUpgradeCheck = 1430;
 				TargetAttributes = {
+					15E0459C6A3015D6E0375953 = {
+						DevelopmentTeam = K7H2JTZ9UM;
+						ProvisioningStyle = Automatic;
+					};
 					171A135D2F32E0F92DBD0761 = {
 						TestTargetID = 15E0459C6A3015D6E0375953;
 					};
@@ -373,6 +377,8 @@
 			buildSettings = {
 				ASSETCATALOG_COMPILER_APPICON_NAME = AppIcon;
 				CODE_SIGN_IDENTITY = "iPhone Developer";
+				CODE_SIGN_STYLE = Automatic;
+				DEVELOPMENT_TEAM = K7H2JTZ9UM;
 				GENERATE_INFOPLIST_FILE = YES;
 				INFOPLIST_FILE = Pocket03/Info.plist;
 				INFOPLIST_KEY_CFBundleDisplayName = Pocket03;
@@ -413,6 +419,8 @@
 			buildSettings = {
 				ASSETCATALOG_COMPILER_APPICON_NAME = AppIcon;
 				CODE_SIGN_IDENTITY = "iPhone Developer";
+				CODE_SIGN_STYLE = Automatic;
+				DEVELOPMENT_TEAM = K7H2JTZ9UM;
 				GENERATE_INFOPLIST_FILE = YES;
 				INFOPLIST_FILE = Pocket03/Info.plist;
 				INFOPLIST_KEY_CFBundleDisplayName = Pocket03;

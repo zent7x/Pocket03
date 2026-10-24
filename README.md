@@ -14,14 +14,14 @@ A native iPhone camera for small, imperfect memories. SwiftUI + AVFoundation + C
 - Front/back camera, torch and 1–4× zoom in Options → Settings (hardware permitting).
 - Photo imports preview before saving, and can switch looks and effect strength. Import accepts videos too, with processing progress and cancellation. Choose the look before opening a video; its processed copy is saved to the gallery.
 - Filtered **silent** H.264 movies for both recording and imported clips. Audio is intentionally absent and labeled in the interface.
-- A persistent phone-style gallery, native sharing and explicit save to Photos. Previous gallery entries remain readable.
+- A persistent phone-style gallery with delete, native sharing and explicit save to Photos. Previous gallery entries remain readable.
 - A labeled generated landscape on the simulator; the physical iPhone uses its camera.
 
 ## Run
 
 Open `Pocket03.xcodeproj` in Xcode, choose an iPhone simulator and Run. The project is checked in; XcodeGen is needed only after changing `project.yml`.
 
-For a physical iPhone, choose your device and set your Apple development team in **Signing & Capabilities**. If necessary, change `studio.pocket03.camera` to a unique bundle ID. Enable Developer Mode on the phone and Run. No team or signing identity has been configured by this project.
+For a physical iPhone: sign in to your Apple ID once in **Xcode → Settings → Accounts**, then choose your device and Run. `project.yml` sets automatic signing with `DEVELOPMENT_TEAM: K7H2JTZ9UM`; change it to your own team, and change `studio.pocket03.camera` if that bundle ID is taken. Enable Developer Mode on the phone. A free Apple ID works, but the installed app expires after seven days and needs reinstalling; a paid account lasts a year. This project configures no distribution signing.
 
 ```sh
 # Regenerate only if changing project.yml

@@ -114,3 +114,37 @@ names, soft-key titles, menu row titles and the saved-memory toasts are unchange
 reason. Verified: full suite green (11 unit/integration, 2 UI), unsigned arm64 Release device
 build succeeds, and the camera, options, processing, settings and gallery screens were inspected
 at rest. `preview-phone.png` regenerated.
+
+## Hardening for personal device use (24 October 2026)
+
+Three gaps mattered for daily use on a real phone rather than in the simulator:
+
+- **The gallery was write-only.** There was no way to remove a memory, so storage only grew. The
+  viewer now has a Delete action behind a confirmation. `MediaLibrary.delete` commits the index
+  first and removes files afterwards, so a failed file removal can never leave the gallery
+  pointing at a file that is already gone.
+- **Thumbnails were decoded per cell per redraw.** The grid called `UIImage(contentsOfFile:)` on
+  every SwiftUI body evaluation. Decoded thumbnails are now held in an `NSCache` bounded to 150
+  entries, and the cache is invalidated on delete.
+- **The camera never recovered from an interruption.** A phone call, another app taking the
+  camera, or a media-services reset left the preview black until the app was backgrounded and
+  reopened. `CameraEngine` now observes `wasInterrupted`, `interruptionEnded` and `runtimeError`,
+  stops any recording cleanly, explains the cause in the viewfinder, and restarts the session when
+  the interruption ends. A media-services reset recovers silently; other runtime errors surface.
+
+### iOS support
+
+The deployment target is iOS 17.0, so the app cannot run on iOS 16 or earlier. Because the project
+builds cleanly at that target, the compiler guarantees no API newer than iOS 17.0 is used without a
+guard. Runtime behaviour has been exercised only on the iOS 26.2 simulator; it is not verified on
+every intermediate release.
+
+### Install status
+
+The target phone is an iPhone 16 Pro on iOS 18.3.1, paired, with Developer Mode enabled. A valid
+`Apple Development` certificate is in the keychain, but Xcode has no Apple ID signed in, so no
+provisioning profile can be created and the signed build fails with `No Account for Team`. Signing
+in once under **Xcode → Settings → Accounts** is the only remaining step; after that the app builds,
+signs and installs from the command line. Device behaviour -- real camera exposure, rotation,
+mirroring, torch, zoom, thermals, Photos permission prompts and the share sheet -- stays unverified
+until it runs there.

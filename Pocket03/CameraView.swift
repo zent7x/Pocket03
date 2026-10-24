@@ -30,6 +30,7 @@ struct CameraView: View {
     @State private var toastTask: Task<Void, Never>?
     @State private var flashing = false
     @State private var exporting = false
+    @State private var confirmingDelete = false
 
     private let ink = Color(red: 0.06, green: 0.11, blue: 0.17)
     private let paper = Color(red: 0.82, green: 0.89, blue: 0.93)
@@ -287,9 +288,21 @@ struct CameraView: View {
                     else if let image = library.thumbnail(memory) { Image(uiImage: image).resizable().interpolation(.none).aspectRatio(3 / 4, contentMode: .fit) }
                     Text(memory.film.rawValue).font(pixel(25)).foregroundStyle(accent)
                     Text(memory.isVideo ? "480×640 · silent video" : "480×640 · JPEG").font(pixel(19)).foregroundStyle(highlight)
-                    ShareLink(item: library.url(memory)) { Text("Send / Share").font(pixel(26)).padding(10) }
+                    HStack(spacing: 10) {
+                        ShareLink(item: library.url(memory)) { Text("Send / Share").font(pixel(26)).padding(10) }
+                        Button("Delete") { confirmingDelete = true }
+                            .font(pixel(26)).padding(10)
+                            .foregroundStyle(Color(red: 0.62, green: 0.14, blue: 0.10))
+                            .accessibilityIdentifier("delete-memory")
+                    }
                     Spacer(minLength: 0)
                 }.padding(12).foregroundStyle(ink)
+                .alert("Delete this memory?", isPresented: $confirmingDelete) {
+                    Button("Delete", role: .destructive) { deleteSelected() }
+                    Button("Cancel", role: .cancel) { }
+                } message: {
+                    Text("It is removed from Pocket03. Anything already saved to Photos stays there.")
+                }
             }
         case .camera: EmptyView()
         }
@@ -356,6 +369,16 @@ struct CameraView: View {
             DispatchQueue.main.asyncAfter(deadline: .now() + 0.1) { flashing = false }
             camera.capture { image in if let image { savePhoto(image) } else { camera.error = "The camera is not ready. Please try again." } }
         }
+    }
+    private func deleteSelected() {
+        guard let memory = selectedMemory else { return }
+        player?.pause(); player = nil
+        do {
+            try library.delete(memory)
+            selectedMemory = nil
+            page = .gallery
+            showToast("MEMORY DELETED")
+        } catch { camera.error = error.localizedDescription }
     }
     private func openMemory(_ memory: Memory) {
         selectedMemory = memory

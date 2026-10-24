@@ -25,8 +25,30 @@ struct Memory: Identifiable, Codable {
         } catch { loadError = error.localizedDescription }
     }
     private(set) var loadError: String?
+    private let thumbnails: NSCache<NSString, UIImage> = {
+        let cache = NSCache<NSString, UIImage>(); cache.countLimit = 150; return cache
+    }()
     func url(_ memory: Memory) -> URL { folder.appendingPathComponent(memory.filename) }
-    func thumbnail(_ memory: Memory) -> UIImage? { UIImage(contentsOfFile: folder.appendingPathComponent(memory.thumbnail).path) }
+    func thumbnail(_ memory: Memory) -> UIImage? {
+        let key = memory.thumbnail as NSString
+        if let cached = thumbnails.object(forKey: key) { return cached }
+        guard let image = UIImage(contentsOfFile: folder.appendingPathComponent(memory.thumbnail).path) else { return nil }
+        thumbnails.setObject(image, forKey: key)
+        return image
+    }
+    // The index is committed before any file is removed, so a failed delete can never leave the
+    // gallery pointing at a file that is already gone.
+    func delete(_ memory: Memory) throws {
+        try ensureWritable()
+        let remaining = memories.filter { $0.id != memory.id }
+        try JSONEncoder().encode(remaining).write(to: folder.appendingPathComponent("index.json"), options: .atomic)
+        memories = remaining
+        thumbnails.removeObject(forKey: memory.thumbnail as NSString)
+        try? FileManager.default.removeItem(at: url(memory))
+        if memory.thumbnail != memory.filename {
+            try? FileManager.default.removeItem(at: folder.appendingPathComponent(memory.thumbnail))
+        }
+    }
     @discardableResult func savePhoto(_ image: UIImage, film: Film) throws -> Memory {
         try ensureWritable()
         guard let data = image.jpegData(compressionQuality: 0.72) else { throw CocoaError(.fileWriteUnknown) }

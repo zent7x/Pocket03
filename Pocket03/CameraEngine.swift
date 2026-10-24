@@ -29,6 +29,7 @@ final class CameraEngine: NSObject, ObservableObject, AVCaptureVideoDataOutputSa
     private var startTime: Double?
     private var demoTimer: DispatchSourceTimer?
     private var configured = false
+    private var observers: [NSObjectProtocol] = []
 
     func start() {
         #if targetEnvironment(simulator)
@@ -72,6 +73,7 @@ final class CameraEngine: NSObject, ObservableObject, AVCaptureVideoDataOutputSa
                     }
                     session.commitConfiguration()
                     orientConnection()
+                    observeSession()
                     configured = true
                 }
                 session.startRunning()
@@ -79,6 +81,52 @@ final class CameraEngine: NSObject, ObservableObject, AVCaptureVideoDataOutputSa
             } catch { fail(error) }
         }
     }
+    private func observeSession() {
+        guard observers.isEmpty else { return }
+        let center = NotificationCenter.default
+        observers.append(center.addObserver(forName: AVCaptureSession.wasInterruptedNotification,
+                                            object: session, queue: .main) { [weak self] note in
+            guard let self else { return }
+            let raw = note.userInfo?[AVCaptureSessionInterruptionReasonKey] as? Int
+            self.cameraMessage = CameraEngine.message(forInterruption: raw)
+            self.queue.async { if self.writer != nil { self.finishRecording() } }
+        })
+        observers.append(center.addObserver(forName: AVCaptureSession.interruptionEndedNotification,
+                                            object: session, queue: .main) { [weak self] _ in
+            guard let self else { return }
+            self.cameraMessage = nil
+            self.queue.async { if !self.session.isRunning { self.session.startRunning() } }
+        })
+        observers.append(center.addObserver(forName: AVCaptureSession.runtimeErrorNotification,
+                                            object: session, queue: .main) { [weak self] note in
+            guard let self else { return }
+            let failure = note.userInfo?[AVCaptureSessionErrorKey] as? AVError
+            self.queue.async {
+                if self.writer != nil { self.finishRecording() }
+                if !self.session.isRunning { self.session.startRunning() }
+            }
+            // A media-services reset recovers by restarting; anything else is worth surfacing.
+            if let failure, failure.code != .mediaServicesWereReset {
+                self.error = failure.localizedDescription
+            }
+        })
+    }
+    private static func message(forInterruption raw: Int?) -> String? {
+        guard let raw, let reason = AVCaptureSession.InterruptionReason(rawValue: raw) else { return nil }
+        switch reason {
+        case .videoDeviceInUseByAnotherClient, .audioDeviceInUseByAnotherClient:
+            return "Another app is using the camera. Close it, or import a photo."
+        case .videoDeviceNotAvailableWithMultipleForegroundApps:
+            return "The camera is unavailable while sharing the screen with another app."
+        case .videoDeviceNotAvailableDueToSystemPressure:
+            return "The camera paused to cool down. It will come back shortly."
+        case .videoDeviceNotAvailableInBackground:
+            return nil
+        @unknown default:
+            return nil
+        }
+    }
+    deinit { observers.forEach(NotificationCenter.default.removeObserver) }
     private func setInput(position: AVCaptureDevice.Position) throws {
         guard let device = AVCaptureDevice.default(.builtInWideAngleCamera, for: .video, position: position) else {
             throw NSError(domain: "Pocket03", code: 3, userInfo: [NSLocalizedDescriptionKey: "This camera is unavailable. You can still import photos."])

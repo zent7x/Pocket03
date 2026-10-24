@@ -22,6 +22,9 @@ targets:
       base:
         ASSETCATALOG_COMPILER_APPICON_NAME: AppIcon
         PRODUCT_BUNDLE_IDENTIFIER: studio.pocket03.camera
+        # Personal install. Override DEVELOPMENT_TEAM if signing with another Apple ID.
+        CODE_SIGN_STYLE: Automatic
+        DEVELOPMENT_TEAM: K7H2JTZ9UM
         GENERATE_INFOPLIST_FILE: YES
         INFOPLIST_KEY_CFBundleDisplayName: Pocket03
         INFOPLIST_KEY_NSCameraUsageDescription: Pocket03 uses your camera to make low-resolution photos and silent videos.

@@ -1,0 +1,10 @@
+2026-10-24 19:46:54.947424+0530 Pocket03UITests-Runner[65248:926612] [Default] Running tests...
+    t =      nans Interface orientation changed to Portrait
+Test Suite 'All tests' started at 2026-10-24 19:46:56.726.
+Test Suite 'Pocket03UITests.xctest' started at 2026-10-24 19:46:56.726.
+Test Suite 'CameraFlowTests' started at 2026-10-24 19:46:56.726.
+Test Case '-[Pocket03UITests.CameraFlowTests testAllThreeLooksAndWorkflowTabs]' started.
+    t =     0.00s Start Test at 2026-10-24 19:46:56.727
+    t =     0.02s Set Up
+    t =     0.03s Open studio.pocket03.camera
+    t =     0.03s     Launch studio.pocket03.camera

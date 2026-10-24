@@ -56,6 +56,22 @@ final class Pocket03Tests: XCTestCase {
         XCTAssertEqual(saved.size, CGSize(width: 480, height: 640))
         XCTAssertEqual(reloaded.memories.first?.film, .candy)
     }
+    @MainActor func testDeleteRemovesEntryAndFilesAndSurvivesReload() throws {
+        let directory = FileManager.default.temporaryDirectory.appendingPathComponent(UUID().uuidString)
+        defer { try? FileManager.default.removeItem(at: directory) }
+        let library = MediaLibrary(folder: directory)
+        let cg = try XCTUnwrap(RetroProcessor().process(RetroProcessor.demoScene(), film: .dreamy, strength: 1))
+        let kept = try library.savePhoto(UIImage(cgImage: cg), film: .dreamy)
+        let doomed = try library.savePhoto(UIImage(cgImage: cg), film: .nokia2630)
+        XCTAssertNotNil(library.thumbnail(doomed))
+        try library.delete(doomed)
+        XCTAssertEqual(library.memories.map(\.id), [kept.id])
+        XCTAssertFalse(FileManager.default.fileExists(atPath: library.url(doomed).path))
+        XCTAssertTrue(FileManager.default.fileExists(atPath: library.url(kept).path))
+        XCTAssertNil(library.thumbnail(doomed))
+        let reloaded = MediaLibrary(folder: directory)
+        XCTAssertEqual(reloaded.memories.map(\.id), [kept.id])
+    }
     @MainActor func testUnreadableManifestIsReported() throws {
         let directory = FileManager.default.temporaryDirectory.appendingPathComponent(UUID().uuidString)
         defer { try? FileManager.default.removeItem(at: directory) }
