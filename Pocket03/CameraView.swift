@@ -140,10 +140,13 @@ struct CameraView: View {
         HStack(spacing: 0) {
             Button { cycleLook(-1) } label: { Text("◀").font(pixel(22)).frame(width: 42, height: 43) }.accessibilityLabel("Previous camera look")
             Button { page = .looks } label: {
-                VStack(spacing: 0) {
-                    Text(film.rawValue).font(pixel(25)).lineLimit(1).minimumScaleFactor(0.7)
-                    Text("\((Film.cameraLooks.firstIndex(of: film) ?? 0) + 1) / 3").font(pixel(14)).foregroundStyle(highlight)
-                }.frame(maxWidth: .infinity, minHeight: 43)
+                HStack(spacing: 9) {
+                    PhoneGlyph(film: film).frame(height: 36)
+                    VStack(spacing: 0) {
+                        Text(film.rawValue).font(pixel(25)).lineLimit(1).minimumScaleFactor(0.7)
+                        Text("\((Film.cameraLooks.firstIndex(of: film) ?? 0) + 1) / 3").font(pixel(14)).foregroundStyle(highlight)
+                    }
+                }.frame(maxWidth: .infinity, minHeight: 46)
             }.accessibilityIdentifier("look-selector")
             Button { cycleLook(1) } label: { Text("▶").font(pixel(22)).frame(width: 42, height: 43) }.accessibilityLabel("Next camera look")
         }.foregroundStyle(ink).background(chrome).disabled(busy)
@@ -221,8 +224,9 @@ struct CameraView: View {
             VStack(spacing: 0) {
                 ForEach(Array(Film.cameraLooks.enumerated()), id: \.element.id) { index, look in
                     Button { selectedLook = look.rawValue; page = .camera } label: {
-                        HStack(alignment: .top, spacing: 10) {
+                        HStack(alignment: .center, spacing: 11) {
                             Text("\(index + 1)").frame(width: 20)
+                            PhoneGlyph(film: look).frame(height: 58)
                             VStack(alignment: .leading, spacing: 6) { Text(look.rawValue).font(pixel(27)); Text(look.subtitle).font(pixel(18)) }
                             Spacer(minLength: 0)
                             if film == look { Text("✓") }

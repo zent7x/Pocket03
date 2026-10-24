@@ -7,7 +7,8 @@ A native iPhone camera for small, imperfect memories. SwiftUI + AVFoundation + C
 ## Features
 
 - A Series 40 style interface with pixel type, pale blue status/menu bars and **Gallery / Capture / Options** soft keys.
-- Three camera looks: **Dreamy (original)**, **Nokia 2630 (2007)** and **Siemens CX70 (2004)**. These are new approximations, not the original app's protected formulas.
+- Three camera looks: **Dreamy (original)**, **Nokia 2630 (2007)** and **Siemens CX70 (2004)**, each shown with a handset
+  picture in the look selector and the Processing menu. These are new approximations, not the original app's protected formulas.
 - Visible **Photo / Video / Import** workflow tabs. All three looks work with photos, recordings, imported photos and imported clips.
 - Portrait 480 × 640 output; adjustable strength, highlight bloom, posterization, grain, banding and vignette. The selected look and strength persist.
 - Front/back camera, torch and 1–4× zoom in Options → Settings (hardware permitting).
@@ -43,6 +44,6 @@ See [docs/reconstruction.md](docs/reconstruction.md). This is a new implementati
 
 Eleven unit and integration tests and two end-to-end UI tests pass on the simulator. They cover all treatment dimensions, zero-strength color preservation, bounded grain, EXIF rotation, photo persistence, corrupt-index protection, storage-failure rollback, portrait silent-video output, imported-video frame preservation across all three looks, import cancellation with temporary-file cleanup, and the photo → gallery → video → relaunch UI flow. Physical camera exposure, front-camera mirroring, torch, on-device performance, Photos permissions and external sharing need an actual iPhone check. Photo picker interaction and physical permission prompts have separate manual validation boundaries; see `docs/validation.md`. App Store distribution is not configured.
 
-## Typography
+## Credits
 
-VT323 © 2011 The VT323 Project Authors (Peter Hull), distributed under the SIL Open Font License 1.1. The font and its full license are included in `Pocket03/Fonts/`. No font download is needed at runtime.
+See [docs/credits.md](docs/credits.md). VT323 © 2011 The VT323 Project Authors (Peter Hull), under the SIL Open Font License 1.1; the font and its licence ship in `Pocket03/Fonts/`. The Nokia 2630 handset picture is derived from a CC0 photograph from Wikimedia Commons. "Nokia" and "Siemens" are trademarks of their owners; Pocket03 is not affiliated with or endorsed by them.

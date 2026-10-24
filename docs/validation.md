@@ -76,3 +76,21 @@ sharing require manual confirmation on a device. The picker selection gesture wa
 imported-image orientation and filter processing are tested at their image-processing boundary.
 Silence is verified by asserting the output asset carries no audio track, on the simulator's
 generated scene rather than live microphone input.
+
+## Handset pictures (24 October 2026)
+
+The look selector and the Processing menu now carry a handset picture per look. The Nokia 2630
+uses a real photograph released under CC0, re-cut for the app; Dreamy and the Siemens CX70 use
+original handset drawings rendered at runtime, because no freely licensed CX70 photograph exists
+and Dreamy is not a real phone. Attribution and the trademark position are in
+[credits.md](credits.md).
+
+Matting the photograph needed measurement rather than threshold guessing: on that source the gold
+soft keys are colorimetrically identical to the brightly lit wall behind the phone (yellowness 155
+against 149), and the shadow band hugging the handset matches the silver bezel. Keying on hue
+alone therefore either ate the keypad or kept the halo. The working approach keys only the bright
+lit wall, takes the largest connected component, and erodes the remaining shadow band. The source
+also carries EXIF orientation 6 and must be transposed before any cropping.
+
+Verified after the change: full suite green (11 unit/integration, 2 UI), and the selector and
+Processing list were inspected at rest in the simulator.
