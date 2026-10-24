@@ -94,3 +94,23 @@ also carries EXIF orientation 6 and must be transposed before any cropping.
 
 Verified after the change: full suite green (11 unit/integration, 2 UI), and the selector and
 Processing list were inspected at rest in the simulator.
+
+## Interface: reverted, then recoloured (24 October 2026)
+
+The amber dot-matrix rebuild was reverted at the user's request -- the Series 40 interface was
+preferred -- and the pale blue design was then given a colour and text pass rather than replaced:
+
+- Palette: deeper ink, lighter paper for contrast, a richer highlight blue, and a new warm accent
+  plus a shared green, so the interface is no longer a single blue.
+- The accent carries readouts and state: the gallery count, the look index, menu row numbers, the
+  effect percentage, the gallery type marker, the viewer's look name, and the DEMO and REC tags.
+- Text: the look index now reads "LOOK 1 / 3"; subtitles and dates drop back to the highlight blue
+  so titles lead; look subtitles are held to one line so the rows keep an even height.
+- The first Options row no longer gets an arbitrary lighter plate; rows are uniform with a
+  hairline separator, and the mode bar gained a hairline so it reads as a band.
+
+The gallery count label is still digits only, because the UI test parses it as an integer. Look
+names, soft-key titles, menu row titles and the saved-memory toasts are unchanged for the same
+reason. Verified: full suite green (11 unit/integration, 2 UI), unsigned arm64 Release device
+build succeeds, and the camera, options, processing, settings and gallery screens were inspected
+at rest. `preview-phone.png` regenerated.

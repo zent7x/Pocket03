@@ -6,7 +6,7 @@ A native iPhone camera for small, imperfect memories. SwiftUI + AVFoundation + C
 
 ## Features
 
-- A Series 40 style interface with pixel type, pale blue status/menu bars and **Gallery / Capture / Options** soft keys.
+- A Series 40 style interface with pixel type, pale blue status/menu bars, a warm accent for counts and state, and **Gallery / Capture / Options** soft keys.
 - Three camera looks: **Dreamy (original)**, **Nokia 2630 (2007)** and **Siemens CX70 (2004)**, each shown with a handset
   picture in the look selector and the Processing menu. These are new approximations, not the original app's protected formulas.
 - Visible **Photo / Video / Import** workflow tabs. All three looks work with photos, recordings, imported photos and imported clips.

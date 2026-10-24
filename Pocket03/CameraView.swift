@@ -31,9 +31,12 @@ struct CameraView: View {
     @State private var flashing = false
     @State private var exporting = false
 
-    private let ink = Color(red: 0.07, green: 0.12, blue: 0.18)
-    private let paper = Color(red: 0.79, green: 0.87, blue: 0.90)
-    private let highlight = Color(red: 0.12, green: 0.29, blue: 0.54)
+    private let ink = Color(red: 0.06, green: 0.11, blue: 0.17)
+    private let paper = Color(red: 0.82, green: 0.89, blue: 0.93)
+    private let highlight = Color(red: 0.09, green: 0.30, blue: 0.60)
+    // A warm second colour: counts, indices and state read differently from labels.
+    private let accent = Color(red: 0.74, green: 0.36, blue: 0.06)
+    private let live = Color(red: 0.13, green: 0.50, blue: 0.16)
     private var film: Film { Film(rawValue: selectedLook).flatMap { Film.cameraLooks.contains($0) ? $0 : nil } ?? .dreamy }
     private var busy: Bool { camera.isRecording || camera.isFinishing || importing || pendingMovie != nil }
     private var centerTitle: String {
@@ -106,19 +109,19 @@ struct CameraView: View {
     }
 
     private func pixel(_ size: CGFloat) -> Font { .custom("VT323-Regular", size: size) }
-    private var chrome: LinearGradient { LinearGradient(colors: [Color(red: 0.87, green: 0.94, blue: 0.96), paper, Color(red: 0.68, green: 0.79, blue: 0.85)], startPoint: .topLeading, endPoint: .bottomTrailing) }
+    private var chrome: LinearGradient { LinearGradient(colors: [Color(red: 0.91, green: 0.96, blue: 0.98), paper, Color(red: 0.70, green: 0.81, blue: 0.87)], startPoint: .topLeading, endPoint: .bottomTrailing) }
 
     private var statusBar: some View {
         HStack(spacing: 7) {
             HStack(alignment: .bottom, spacing: 2) {
                 ForEach(0..<4) { i in Rectangle().fill(ink).frame(width: 3, height: CGFloat(4 + i * 3)) }
             }.accessibilityHidden(true)
-            HStack(spacing: 1) { ForEach(0..<4) { _ in Rectangle().fill(Color(red: 0.17, green: 0.6, blue: 0.14)).frame(width: 3, height: 8) } }
+            HStack(spacing: 1) { ForEach(0..<4) { _ in Rectangle().fill(live).frame(width: 3, height: 8) } }
                 .padding(2).overlay(Rectangle().stroke(ink, lineWidth: 1)).accessibilityHidden(true)
             Image(systemName: camera.torchOn ? "bolt.fill" : "camera.fill").font(.system(size: 11)).accessibilityHidden(true)
-            if camera.isRecording { Text("REC").foregroundStyle(.red) }
+            if camera.isRecording { Text("REC").foregroundStyle(accent) }
             Spacer()
-            if camera.isDemo { Text("DEMO").font(pixel(16)).foregroundStyle(highlight) }
+            if camera.isDemo { Text("DEMO").font(pixel(16)).foregroundStyle(accent) }
             Text(Date(), format: .dateTime.hour(.twoDigits(amPM: .omitted)).minute(.twoDigits)).font(pixel(26))
         }
         .font(pixel(19)).foregroundStyle(ink).padding(.horizontal, 10).frame(height: 31).background(chrome)
@@ -135,6 +138,7 @@ struct CameraView: View {
                     .accessibilityAddTraits(mode == item ? .isSelected : [])
             }
         }.background(paper)
+            .overlay(alignment: .bottom) { Rectangle().fill(highlight.opacity(0.22)).frame(height: 1) }
     }
     private var lookSelector: some View {
         HStack(spacing: 0) {
@@ -143,8 +147,8 @@ struct CameraView: View {
                 HStack(spacing: 9) {
                     PhoneGlyph(film: film).frame(height: 36)
                     VStack(spacing: 0) {
-                        Text(film.rawValue).font(pixel(25)).lineLimit(1).minimumScaleFactor(0.7)
-                        Text("\((Film.cameraLooks.firstIndex(of: film) ?? 0) + 1) / 3").font(pixel(14)).foregroundStyle(highlight)
+                        Text(film.rawValue).font(pixel(26)).lineLimit(1).minimumScaleFactor(0.7)
+                        Text("LOOK \((Film.cameraLooks.firstIndex(of: film) ?? 0) + 1) / 3").font(pixel(15)).foregroundStyle(accent)
                     }
                 }.frame(maxWidth: .infinity, minHeight: 46)
             }.accessibilityIdentifier("look-selector")
@@ -155,7 +159,7 @@ struct CameraView: View {
         HStack {
             Text(mode == .video ? "480×640 · silent video" : mode == .imported ? "Photo & video import" : "0.3 MP · 480×640")
             Spacer()
-            Text(String(format: "%03d", library.memories.count)).accessibilityIdentifier("gallery-count")
+            Text(String(format: "%03d", library.memories.count)).foregroundStyle(accent).accessibilityIdentifier("gallery-count")
         }.font(pixel(17)).foregroundStyle(highlight).padding(.horizontal, 10).frame(height: 23).background(paper)
     }
     private var viewfinder: some View {
@@ -225,9 +229,12 @@ struct CameraView: View {
                 ForEach(Array(Film.cameraLooks.enumerated()), id: \.element.id) { index, look in
                     Button { selectedLook = look.rawValue; page = .camera } label: {
                         HStack(alignment: .center, spacing: 11) {
-                            Text("\(index + 1)").frame(width: 20)
+                            Text("\(index + 1)").foregroundStyle(film == look ? .white : accent).frame(width: 20)
                             PhoneGlyph(film: look).frame(height: 58)
-                            VStack(alignment: .leading, spacing: 6) { Text(look.rawValue).font(pixel(27)); Text(look.subtitle).font(pixel(18)) }
+                            VStack(alignment: .leading, spacing: 6) {
+                                Text(look.rawValue).font(pixel(27))
+                                Text(look.subtitle).font(pixel(18)).lineLimit(1).minimumScaleFactor(0.75).foregroundStyle(film == look ? .white.opacity(0.85) : highlight)
+                            }
                             Spacer(minLength: 0)
                             if film == look { Text("✓") }
                         }.padding(14).frame(maxWidth: .infinity, alignment: .leading)
@@ -243,7 +250,10 @@ struct CameraView: View {
                 menuRow("2", camera.torchOn ? "Torch: On" : "Torch: Off", icon: "bolt") { camera.toggleTorch() }.disabled(camera.isDemo)
                 menuRow("3", "Zoom: \(Int(camera.zoom))×", icon: "plus.magnifyingglass") { camera.setZoom(camera.zoom >= 3 ? 1 : camera.zoom + 1) }.disabled(camera.isDemo)
                 VStack(alignment: .leading, spacing: 12) {
-                    Text("Effect strength: \(Int(strength * 100))%").font(pixel(25))
+                    HStack(spacing: 0) {
+                        Text("Effect strength: ").font(pixel(25))
+                        Text("\(Int(strength * 100))%").font(pixel(25)).foregroundStyle(accent)
+                    }
                     Slider(value: $strength, in: 0...1).tint(highlight).accessibilityLabel("Effect strength")
                 }.padding(17)
                 Spacer()
@@ -259,8 +269,11 @@ struct CameraView: View {
                             Button { openMemory(memory) } label: {
                                 VStack(alignment: .leading, spacing: 4) {
                                     if let image = library.thumbnail(memory) { Image(uiImage: image).resizable().interpolation(.none).aspectRatio(3 / 4, contentMode: .fit).border(.white, width: 2) }
-                                    Text(memory.isVideo ? "▶ Video" : "▣ Image").font(pixel(22))
-                                    Text(memory.date, format: .dateTime.day().month()).font(pixel(18))
+                                    HStack(spacing: 5) {
+                                        Text(memory.isVideo ? "▶" : "▣").font(pixel(22)).foregroundStyle(accent)
+                                        Text(memory.isVideo ? "Video" : "Image").font(pixel(22))
+                                    }
+                                    Text(memory.date, format: .dateTime.day().month()).font(pixel(18)).foregroundStyle(highlight)
                                 }.foregroundStyle(ink)
                             }.buttonStyle(.plain).accessibilityIdentifier("memory-\(memory.id)")
                         }
@@ -272,8 +285,8 @@ struct CameraView: View {
                 VStack(spacing: 12) {
                     if memory.isVideo { VideoPlayer(player: player).aspectRatio(3 / 4, contentMode: .fit) }
                     else if let image = library.thumbnail(memory) { Image(uiImage: image).resizable().interpolation(.none).aspectRatio(3 / 4, contentMode: .fit) }
-                    Text(memory.film.rawValue).font(pixel(25))
-                    Text(memory.isVideo ? "480×640 · silent video" : "480×640 · JPEG").font(pixel(19))
+                    Text(memory.film.rawValue).font(pixel(25)).foregroundStyle(accent)
+                    Text(memory.isVideo ? "480×640 · silent video" : "480×640 · JPEG").font(pixel(19)).foregroundStyle(highlight)
                     ShareLink(item: library.url(memory)) { Text("Send / Share").font(pixel(26)).padding(10) }
                     Spacer(minLength: 0)
                 }.padding(12).foregroundStyle(ink)
@@ -284,13 +297,13 @@ struct CameraView: View {
     private func menuRow(_ number: String, _ title: String, icon: String, action: @escaping () -> Void) -> some View {
         Button(action: action) {
             HStack(spacing: 12) {
-                Text(number).font(pixel(25)).foregroundStyle(highlight).frame(width: 20)
+                Text(number).font(pixel(25)).foregroundStyle(accent).frame(width: 20)
                 Image(systemName: icon).font(.system(size: 17)).frame(width: 23)
                 Text(title).font(pixel(27)); Spacer(minLength: 0)
                 Text("›").font(pixel(27))
             }.foregroundStyle(ink).padding(.horizontal, 12).frame(minHeight: 53)
-                .background(page == .options && number == "1" ? Color.white.opacity(0.7) : Color.white.opacity(0.18))
-                .overlay(alignment: .bottom) { Rectangle().fill(highlight.opacity(0.15)).frame(height: 1) }
+                .background(Color.white.opacity(0.3))
+                .overlay(alignment: .bottom) { Rectangle().fill(highlight.opacity(0.18)).frame(height: 1) }
         }.buttonStyle(.plain)
     }
     private var softKeys: some View {
