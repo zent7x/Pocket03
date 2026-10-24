@@ -45,26 +45,22 @@ final class RetroProcessor {
         output = output.clampedToExtent().applyingFilter("CIGaussianBlur", parameters: [kCIInputRadiusKey: 0.65]).cropped(to: rect)
         // The analyzed artifact names separate halation extraction, blur and merge controls.
         // CIBloom provides our own highlight spread treatment.
-        output = output.applyingFilter("CIBloom", parameters: [kCIInputRadiusKey: 5.5, kCIInputIntensityKey: film == .daydream ? 0.52 : 0.25]).cropped(to: rect)
+        output = output.applyingFilter("CIBloom", parameters: [kCIInputRadiusKey: 5.5, kCIInputIntensityKey: film == .daydream ? 0.18 : 0.09]).cropped(to: rect)
         output = output.applyingFilter("CIColorPosterize", parameters: ["inputLevels": film == .mono ? 32 : 24])
         if let random = CIFilter(name: "CIRandomGenerator")?.outputImage {
-            let noise = random.cropped(to: rect).applyingFilter("CIColorMatrix", parameters: [
-                "inputRVector": CIVector(x: 0.065, y: 0, z: 0, w: 0),
-                "inputGVector": CIVector(x: 0.065, y: 0, z: 0, w: 0),
-                "inputBVector": CIVector(x: 0.065, y: 0, z: 0, w: 0),
-                "inputAVector": CIVector(x: 0, y: 0, z: 0, w: 0),
-                "inputBiasVector": CIVector(x: -0.0325, y: -0.0325, z: -0.0325, w: 1)
+            // Force an opaque, bounded noise image before blending. CIRandomGenerator's
+            // random alpha must not be unpremultiplied into highlight spikes.
+            let monochrome = random.applyingFilter("CIColorClamp", parameters: [
+                "inputMinComponents": CIVector(x: 0, y: 0, z: 0, w: 1),
+                "inputMaxComponents": CIVector(x: 1, y: 1, z: 1, w: 1)
+            ]).applyingFilter("CIColorControls", parameters: [kCIInputSaturationKey: 0])
+            output = output.applyingFilter("CIDissolveTransition", parameters: [
+                kCIInputTargetImageKey: monochrome.cropped(to: rect), kCIInputTimeKey: 0.045
             ])
-            output = noise.applyingFilter("CIAdditionCompositing", parameters: [kCIInputBackgroundImageKey: output])
-            let banding = random.transformed(by: CGAffineTransform(scaleX: 480, y: 1))
-                .cropped(to: rect).applyingFilter("CIColorMatrix", parameters: [
-                    "inputRVector": CIVector(x: 0.018, y: 0, z: 0, w: 0),
-                    "inputGVector": CIVector(x: 0.018, y: 0, z: 0, w: 0),
-                    "inputBVector": CIVector(x: 0.018, y: 0, z: 0, w: 0),
-                    "inputAVector": CIVector(x: 0, y: 0, z: 0, w: 0),
-                    "inputBiasVector": CIVector(x: -0.009, y: -0.009, z: -0.009, w: 1)
-                ])
-            output = banding.applyingFilter("CIAdditionCompositing", parameters: [kCIInputBackgroundImageKey: output])
+            let banding = monochrome.transformed(by: CGAffineTransform(scaleX: 480, y: 1)).cropped(to: rect)
+            output = output.applyingFilter("CIDissolveTransition", parameters: [
+                kCIInputTargetImageKey: banding, kCIInputTimeKey: 0.018
+            ])
         }
         output = output.applyingFilter("CIVignette", parameters: [kCIInputIntensityKey: 0.4, kCIInputRadiusKey: 180])
         output = output.applyingFilter("CIDissolveTransition", parameters: [kCIInputTargetImageKey: base, kCIInputTimeKey: 1 - amount]).cropped(to: rect)

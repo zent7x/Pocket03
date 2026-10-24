@@ -1,6 +1,6 @@
 # Evidence and reconstruction decisions
 
-The investigation artifacts remain at `../03mp-reverse/`. Its `REPORT.md` documents package hashes, source locations and unresolved questions.
+The investigation artifacts remain at `../03mp-reverse/`. A copy is preserved in [original-analysis.md](original-analysis.md), which documents package hashes, source locations and unresolved questions.
 
 REA artifact Evidence: `ev_7217919a1c35af941ae5dca0e0d7f8ec93becd7eb692b62cabc8059339cacd81`. This is inventory evidence. Android decompilation and string decoding were performed separately with the existing standalone JADX and isolated Java decoder. REA's Android provider requires a missing `jadx-headless-mcp 0.7.1` JAR; its native engines are also unconfigured. This project does not claim a complete reversal.
 

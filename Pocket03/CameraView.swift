@@ -17,10 +17,11 @@ struct CameraView: View {
     @State private var toast: String?
     @State private var flashing = false
     @State private var importing = false
+    @State private var pendingMovie: (URL, UIImage, Film)?
     @State private var movieHandlerSet = false
     @State private var toastTask: Task<Void, Never>?
 
-    private var busy: Bool { camera.isRecording || camera.isFinishing || importing }
+    private var busy: Bool { camera.isRecording || camera.isFinishing || importing || pendingMovie != nil }
     var body: some View {
         GeometryReader { geometry in
             let compact = geometry.size.height < 730
@@ -85,7 +86,7 @@ struct CameraView: View {
                             if camera.isRecording { RoundedRectangle(cornerRadius: 3).fill(ink).frame(width: 23, height: 23) }
                             else { Image(systemName: videoMode ? "video.fill" : "camera.aperture").font(.system(size: 28, weight: .light)).foregroundStyle(ink) }
                         }
-                    }.buttonStyle(.plain).disabled(camera.preview == nil || camera.isFinishing || importing)
+                    }.buttonStyle(.plain).disabled(camera.preview == nil || camera.isFinishing || importing || pendingMovie != nil)
                         .accessibilityLabel(camera.isRecording ? "Stop recording" : videoMode ? "Record silent video" : "Capture photo").accessibilityIdentifier("shutter")
                     PhotosPicker(selection: $pickerItem, matching: .images) {
                         VStack(spacing: 9) {
@@ -107,15 +108,18 @@ struct CameraView: View {
         .sheet(isPresented: $gallery) { GalleryView(library: library) }
         .sheet(isPresented: $options) { filmSheet.presentationDetents([.height(390)]) }
         .alert("Pocket03", isPresented: Binding(get: { camera.error != nil }, set: { if !$0 { camera.error = nil } })) {
+            if pendingMovie != nil {
+                Button("Retry saving movie") {
+                    camera.error = nil
+                    if let movie = pendingMovie { saveMovie(movie.0, thumbnail: movie.1, film: movie.2) }
+                }
+            }
             Button("OK") { camera.error = nil }
         } message: { Text(camera.error ?? "") }
         .onAppear {
             if !movieHandlerSet {
                 camera.onMovie = { url, thumbnail, film in
-                    do { try library.saveVideo(url, thumbnail: thumbnail, film: film); showToast("MOVIE SAVED") }
-                    catch { camera.error = error.localizedDescription }
-                    // Only the writer-owned temporary file is removed after copying.
-                    try? FileManager.default.removeItem(at: url)
+                    saveMovie(url, thumbnail: thumbnail, film: film)
                 }
                 movieHandlerSet = true
                 if let error = library.loadError { camera.error = "Could not load memories: \(error)" }
@@ -201,6 +205,11 @@ struct CameraView: View {
             if let toast {
                 Text(toast).font(.system(size: 11, weight: .bold, design: .monospaced)).padding(14).foregroundStyle(ink).background(phosphor).transition(.opacity)
             }
+            if let movie = pendingMovie {
+                Button("RETRY MOVIE SAVE") { saveMovie(movie.0, thumbnail: movie.1, film: movie.2) }
+                    .font(.system(size: 12, weight: .bold, design: .monospaced))
+                    .padding(15).foregroundStyle(ink).background(phosphor)
+            }
             if importing || camera.isFinishing { ProgressView().tint(phosphor).padding(20).background(.black.opacity(0.7), in: RoundedRectangle(cornerRadius: 8)) }
             if flashing { Color.white.opacity(0.8) }
         }.aspectRatio(3 / 4, contentMode: .fit).clipped()
@@ -237,6 +246,17 @@ struct CameraView: View {
         guard let image else { camera.error = "The image could not be processed. Please try again."; return }
         do { try library.savePhoto(image, film: film); showToast("MEMORY SAVED") }
         catch { camera.error = error.localizedDescription }
+    }
+    private func saveMovie(_ url: URL, thumbnail: UIImage, film: Film) {
+        do {
+            try library.saveVideo(url, thumbnail: thumbnail, film: film)
+            pendingMovie = nil
+            try? FileManager.default.removeItem(at: url)
+            showToast("MOVIE SAVED")
+        } catch {
+            pendingMovie = (url, thumbnail, film)
+            camera.error = "The movie is still kept temporarily. Free some space and retry saving. " + error.localizedDescription
+        }
     }
     private func showToast(_ text: String) {
         toastTask?.cancel()

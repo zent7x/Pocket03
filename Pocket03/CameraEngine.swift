@@ -21,6 +21,7 @@ final class CameraEngine: NSObject, ObservableObject, AVCaptureVideoDataOutputSa
     private var film: Film = .daydream
     private var strength = 0.8
     private var latest: CGImage?
+    private var finishing = false
     private var writer: SilentVideoWriter?
     private var recordingFilm: Film = .daydream
     private var lastFrame = -Double.infinity
@@ -56,14 +57,19 @@ final class CameraEngine: NSObject, ObservableObject, AVCaptureVideoDataOutputSa
             do {
                 if !configured {
                     session.beginConfiguration()
-                    defer { session.commitConfiguration() }
-                    session.sessionPreset = .vga640x480
-                    try setInput(position: .back)
-                    output.videoSettings = [kCVPixelBufferPixelFormatTypeKey as String: kCVPixelFormatType_32BGRA]
-                    output.alwaysDiscardsLateVideoFrames = true
-                    output.setSampleBufferDelegate(self, queue: queue)
-                    guard session.canAddOutput(output) else { throw CocoaError(.featureUnsupported) }
-                    session.addOutput(output)
+                    do {
+                        session.sessionPreset = .vga640x480
+                        try setInput(position: .back)
+                        output.videoSettings = [kCVPixelBufferPixelFormatTypeKey as String: kCVPixelFormatType_32BGRA]
+                        output.alwaysDiscardsLateVideoFrames = true
+                        output.setSampleBufferDelegate(self, queue: queue)
+                        guard session.canAddOutput(output) else { throw CocoaError(.featureUnsupported) }
+                        session.addOutput(output)
+                    } catch {
+                        session.commitConfiguration()
+                        throw error
+                    }
+                    session.commitConfiguration()
                     orientConnection()
                     configured = true
                 }
@@ -99,8 +105,9 @@ final class CameraEngine: NSObject, ObservableObject, AVCaptureVideoDataOutputSa
             do {
                 setTorch(false)
                 session.beginConfiguration()
-                defer { session.commitConfiguration() }
-                try setInput(position: input?.device.position == .front ? .back : .front)
+                do { try setInput(position: input?.device.position == .front ? .back : .front) }
+                catch { session.commitConfiguration(); throw error }
+                session.commitConfiguration()
                 orientConnection()
                 DispatchQueue.main.async { self.zoom = 1 }
             } catch { fail(error) }
@@ -143,6 +150,7 @@ final class CameraEngine: NSObject, ObservableObject, AVCaptureVideoDataOutputSa
     }
     func toggleRecording() {
         queue.async { [self] in
+            guard !finishing else { return }
             if writer != nil { finishRecording(); return }
             guard latest != nil else { return }
             do {
@@ -154,9 +162,11 @@ final class CameraEngine: NSObject, ObservableObject, AVCaptureVideoDataOutputSa
     private func finishRecording() {
         guard let current = writer, let thumbnail = latest else { return }
         writer = nil
+        finishing = true
         let usedFilm = recordingFilm
         DispatchQueue.main.async { self.isRecording = false; self.isFinishing = true }
         current.finish { [weak self] result in
+            self?.queue.async { self?.finishing = false }
             DispatchQueue.main.async {
                 guard let self else { return }
                 self.isFinishing = false

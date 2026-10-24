@@ -39,4 +39,4 @@ See [docs/reconstruction.md](docs/reconstruction.md). This is a new implementati
 
 ## Validation
 
-The project has simulator integration coverage for all treatment dimensions, zero-strength color preservation, EXIF rotation, photo persistence, corrupt-index protection, portrait silent-video output, and the photo → gallery → video → relaunch UI flow. Physical camera exposure, front-camera mirroring, torch, on-device performance, Photos permissions and external sharing need an actual iPhone check. App Store distribution is not configured.
+The project has simulator integration coverage for all treatment dimensions, zero-strength color preservation, bounded grain, EXIF rotation, photo persistence, corrupt-index protection, portrait silent-video output, and the photo → gallery → video → relaunch UI flow. Physical camera exposure, front-camera mirroring, torch, on-device performance, Photos permissions and external sharing need an actual iPhone check. The Photos picker selection gesture was not automated. App Store distribution is not configured.

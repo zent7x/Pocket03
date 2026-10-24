@@ -1,6 +1,7 @@
 import AppKit
-let image = NSImage(size: NSSize(width: 1024, height: 1024))
-image.lockFocus()
+let bitmap = NSBitmapImageRep(bitmapDataPlanes: nil, pixelsWide: 1024, pixelsHigh: 1024, bitsPerSample: 8, samplesPerPixel: 3, hasAlpha: false, isPlanar: false, colorSpaceName: .deviceRGB, bytesPerRow: 0, bitsPerPixel: 0)!
+NSGraphicsContext.saveGraphicsState()
+NSGraphicsContext.current = NSGraphicsContext(bitmapImageRep: bitmap)
 NSColor(calibratedWhite: 0.09, alpha: 1).setFill()
 NSBezierPath(rect: NSRect(x: 0, y: 0, width: 1024, height: 1024)).fill()
 let green = NSColor(red: 0.78, green: 0.87, blue: 0.65, alpha: 1)
@@ -22,6 +23,5 @@ NSColor(calibratedWhite: 0.11, alpha: 1).setFill()
 NSBezierPath(roundedRect: NSRect(x: 705, y: 681, width: 99, height: 32), xRadius: 6, yRadius: 6).fill()
 let text = "03" as NSString
 text.draw(at: NSPoint(x: 419, y: 95), withAttributes: [.font: NSFont.monospacedSystemFont(ofSize: 75, weight: .light), .foregroundColor: green])
-image.unlockFocus()
-let bitmap = NSBitmapImageRep(data: image.tiffRepresentation!)!
+NSGraphicsContext.restoreGraphicsState()
 try bitmap.representation(using: .png, properties: [:])!.write(to: URL(fileURLWithPath: CommandLine.arguments[1]))

@@ -22,6 +22,17 @@ final class Pocket03Tests: XCTestCase {
         XCTAssertEqual(Int(pixel[1]), 51, accuracy: 3)
         XCTAssertEqual(Int(pixel[2]), 102, accuracy: 3)
     }
+    func testGrainDoesNotClipFlatMidtones() throws {
+        let processor = RetroProcessor()
+        let source = CIImage(color: CIColor(red: 0.4, green: 0.4, blue: 0.4)).cropped(to: CGRect(x: 0, y: 0, width: 480, height: 640))
+        let rendered = try XCTUnwrap(processor.process(source, film: .daydream, strength: 1))
+        var pixels = [UInt8](repeating: 0, count: 64 * 64 * 4)
+        processor.context.render(CIImage(cgImage: rendered), toBitmap: &pixels, rowBytes: 64 * 4,
+            bounds: CGRect(x: 208, y: 288, width: 64, height: 64), format: .RGBA8, colorSpace: CGColorSpaceCreateDeviceRGB())
+        let reds = stride(from: 0, to: pixels.count, by: 4).map { Int(pixels[$0]) }
+        XCTAssertLessThan(try XCTUnwrap(reds.max()) - XCTUnwrap(reds.min()), 70)
+        XCTAssertLessThan(reds.reduce(0, +) / reds.count, 170)
+    }
     func testImportRespectsEXIFRotation() throws {
         let format = UIGraphicsImageRendererFormat(); format.scale = 1
         let source = UIGraphicsImageRenderer(size: CGSize(width: 40, height: 20), format: format).image { ctx in
@@ -55,6 +66,20 @@ final class Pocket03Tests: XCTestCase {
         let image = UIImage(cgImage: try XCTUnwrap(RetroProcessor().process(RetroProcessor.demoScene(), film: .daydream, strength: 1)))
         XCTAssertThrowsError(try library.savePhoto(image, film: .daydream))
         XCTAssertEqual(try String(contentsOf: directory.appendingPathComponent("index.json")), "broken")
+    }
+    @MainActor func testFailedIndexCommitLeavesNoOrphanAndKeepsSourceMovie() throws {
+        let directory = FileManager.default.temporaryDirectory.appendingPathComponent(UUID().uuidString)
+        let source = FileManager.default.temporaryDirectory.appendingPathComponent(UUID().uuidString + ".mov")
+        defer { try? FileManager.default.removeItem(at: directory); try? FileManager.default.removeItem(at: source) }
+        let library = MediaLibrary(folder: directory)
+        try FileManager.default.createDirectory(at: directory.appendingPathComponent("index.json"), withIntermediateDirectories: true)
+        let image = UIImage(cgImage: try XCTUnwrap(RetroProcessor().process(RetroProcessor.demoScene(), film: .daydream, strength: 1)))
+        XCTAssertThrowsError(try library.savePhoto(image, film: .daydream))
+        try Data("source movie fixture".utf8).write(to: source)
+        XCTAssertThrowsError(try library.saveVideo(source, thumbnail: image, film: .daydream))
+        XCTAssertTrue(FileManager.default.fileExists(atPath: source.path))
+        XCTAssertEqual(try FileManager.default.contentsOfDirectory(atPath: directory.path), ["index.json"])
+        XCTAssertTrue(library.memories.isEmpty)
     }
     func testFilteredVideoIsPlayablePortraitWithoutAudio() async throws {
         let writer = try SilentVideoWriter()

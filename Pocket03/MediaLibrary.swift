@@ -33,17 +33,26 @@ struct Memory: Identifiable, Codable {
         let id = UUID(), name = UUID().uuidString + ".jpg"
         let memory = Memory(id: id, date: Date(), filename: name, thumbnail: name, film: film, isVideo: false)
         try data.write(to: folder.appendingPathComponent(name), options: .atomic)
-        try insert(memory)
+        do { try insert(memory) }
+        catch { try? FileManager.default.removeItem(at: folder.appendingPathComponent(name)); throw error }
         return memory
     }
     @discardableResult func saveVideo(_ source: URL, thumbnail: UIImage, film: Film) throws -> Memory {
         try ensureWritable()
         let name = UUID().uuidString, filename = name + ".mov", thumb = name + ".jpg"
+        var committed = false
+        defer {
+            if !committed {
+                try? FileManager.default.removeItem(at: folder.appendingPathComponent(filename))
+                try? FileManager.default.removeItem(at: folder.appendingPathComponent(thumb))
+            }
+        }
         try FileManager.default.copyItem(at: source, to: folder.appendingPathComponent(filename))
         guard let data = thumbnail.jpegData(compressionQuality: 0.7) else { throw CocoaError(.fileWriteUnknown) }
         try data.write(to: folder.appendingPathComponent(thumb), options: .atomic)
         let memory = Memory(id: UUID(), date: Date(), filename: filename, thumbnail: thumb, film: film, isVideo: true)
         try insert(memory)
+        committed = true
         return memory
     }
     private func ensureWritable() throws {
