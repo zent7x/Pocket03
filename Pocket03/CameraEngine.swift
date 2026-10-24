@@ -18,12 +18,13 @@ final class CameraEngine: NSObject, ObservableObject, AVCaptureVideoDataOutputSa
     private let processor = RetroProcessor()
     private let output = AVCaptureVideoDataOutput()
     private var input: AVCaptureDeviceInput?
-    private var film: Film = .daydream
+    private var film: Film = .dreamy
     private var strength = 0.8
     private var latest: CGImage?
+    private var latestSource: CIImage?
     private var finishing = false
     private var writer: SilentVideoWriter?
-    private var recordingFilm: Film = .daydream
+    private var recordingFilm: Film = .dreamy
     private var lastFrame = -Double.infinity
     private var startTime: Double?
     private var demoTimer: DispatchSourceTimer?
@@ -138,7 +139,8 @@ final class CameraEngine: NSObject, ObservableObject, AVCaptureVideoDataOutputSa
     func update(film: Film, strength: Double) { queue.async { self.film = film; self.strength = strength } }
     func capture(_ completion: @escaping (UIImage?) -> Void) {
         queue.async { [self] in
-            let image = latest.map { UIImage(cgImage: $0) }
+            let processed = latestSource.flatMap { processor.process($0, film: film, strength: strength) }
+            let image = processed.map { UIImage(cgImage: $0) }
             DispatchQueue.main.async { completion(image) }
         }
     }
@@ -186,6 +188,7 @@ final class CameraEngine: NSObject, ObservableObject, AVCaptureVideoDataOutputSa
         let seconds = time.seconds
         guard seconds - lastFrame >= 1.0 / 15.0 else { return }
         lastFrame = seconds
+        latestSource = image
         guard let cg = processor.process(image, film: film, strength: strength) else { return }
         latest = cg
         if let writer {

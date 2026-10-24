@@ -21,3 +21,10 @@ Apple references used to check the platform APIs:
 - https://developer.apple.com/documentation/avfoundation/avcaptureconnection/videorotationangle
 - https://developer.apple.com/documentation/avfoundation/avassetwriterinput/requestmediadatawhenready(on:using:)
 - https://developer.apple.com/documentation/photosui/photospickeritem/loadtransferable(type:)
+
+
+## Button-phone follow-up
+
+The developer's App Store screenshots and description were consulted as layout references: https://apps.apple.com/us/app/0-3mp-camera/id1661877394. The screen uses the same general Series 40 vocabulary of a pale blue status bar and Gallery / Capture / Options soft keys, with newly written SwiftUI artwork. No screenshot pixels are shipped. The listing's version notes identify Nokia 2630 and Siemens CX70; the requested third look is Dreamy (original).
+
+The primary selector now offers Dreamy (original), Nokia 2630 (2007) and Siemens CX70 (2004). All coefficients are our own; they are not assertions of sensor-accurate equivalence. Earlier Daydream / After Hours / Candy CCD / Mono identifiers stay supported when decoding old local gallery metadata. Both capture modes and photo/video imports share the same treatment recipes. Imported videos are processed offline frame by frame into a new silent H.264 MOV; the original selected file is not modified.

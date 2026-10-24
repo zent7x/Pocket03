@@ -3,16 +3,51 @@ import UIKit
 
 // Original treatments informed by artifact evidence, not recovered proprietary formulas.
 enum Film: String, CaseIterable, Codable, Identifiable {
+    case dreamy = "Dreamy (original)"
+    case nokia2630 = "Nokia 2630 (2007)"
+    case siemensCX70 = "Siemens CX70 (2004)"
+    // Keep prior persisted identifiers readable; only cameraLooks appear in the selector.
     case daydream = "DAYDREAM", dusk = "AFTER HOURS", candy = "CANDY CCD", mono = "MONO 01"
+    static let cameraLooks: [Film] = [.dreamy, .nokia2630, .siemensCX70]
     var id: String { rawValue }
     var subtitle: String {
         switch self {
-        case .daydream: return "Soft light. Small memories."
+        case .dreamy, .daydream: return "Soft highlights · warm color · 0.3 MP"
+        case .nokia2630: return "Cool shadows · sensor grain · 2007"
+        case .siemensCX70: return "Bold color · soft detail · 2004"
         case .dusk: return "Blue shadows. Last light."
         case .candy: return "Sun-faded, slightly electric."
         case .mono: return "Less color. More feeling."
         }
     }
+    var treatment: Treatment {
+        switch self {
+        case .dreamy, .daydream: return Treatment(saturation: 0.8, contrast: 1.08, brightness: 0.018, tint: CIVector(x: 0.028, y: 0.012, z: -0.014, w: 0), blur: 0.65, bloom: 0.18, levels: 24, grain: 0.045, banding: 0.018, pixelScale: 1)
+        case .nokia2630: return Treatment(saturation: 0.96, contrast: 1.19, brightness: -0.015, tint: CIVector(x: -0.012, y: 0.008, z: 0.028, w: 0), blur: 0.48, bloom: 0.07, levels: 20, grain: 0.085, banding: 0.03, pixelScale: 1)
+        case .siemensCX70: return Treatment(saturation: 1.3, contrast: 1.14, brightness: 0.01, tint: CIVector(x: 0.025, y: 0.018, z: -0.025, w: 0), blur: 0.9, bloom: 0.1, levels: 16, grain: 0.055, banding: 0.024, pixelScale: 1.8)
+        case .dusk: return Treatment(saturation: 0.8, contrast: 1.18, brightness: -0.045, tint: CIVector(x: -0.012, y: 0.005, z: 0.045, w: 0), blur: 0.65, bloom: 0.09, levels: 24, grain: 0.045, banding: 0.018, pixelScale: 1)
+        case .candy: return Treatment(saturation: 1.35, contrast: 1.08, brightness: 0.018, tint: CIVector(x: 0.035, y: -0.01, z: 0.025, w: 0), blur: 0.65, bloom: 0.09, levels: 24, grain: 0.045, banding: 0.018, pixelScale: 1)
+        case .mono: return Treatment(saturation: 0, contrast: 1.08, brightness: 0.018, tint: CIVector(x: 0.018, y: 0.023, z: 0.012, w: 0), blur: 0.65, bloom: 0.09, levels: 32, grain: 0.045, banding: 0.018, pixelScale: 1)
+        }
+    }
+}
+
+struct Treatment {
+    let saturation: Double
+    let contrast: Double
+    let brightness: Double
+    let tint: CIVector
+    let blur: Double
+    let bloom: Double
+    let levels: Double
+    let grain: Double
+    let banding: Double
+    let pixelScale: Double
+}
+
+enum CaptureMode: String, CaseIterable, Identifiable {
+    case photo = "Photo", video = "Video", imported = "Import"
+    var id: String { rawValue }
 }
 
 final class RetroProcessor {
@@ -29,24 +64,19 @@ final class RetroProcessor {
         let base = scaled.cropped(to: crop).transformed(by: CGAffineTransform(translationX: -crop.minX, y: -crop.minY))
         let rect = CGRect(origin: .zero, size: size)
         var output = base
-        let saturation: Double = film == .mono ? 0 : (film == .candy ? 1.35 : 0.8)
+        let treatment = film.treatment
         output = output.applyingFilter("CIColorControls", parameters: [
-            kCIInputSaturationKey: saturation, kCIInputContrastKey: film == .dusk ? 1.18 : 1.08,
-            kCIInputBrightnessKey: film == .dusk ? -0.045 : 0.018
+            kCIInputSaturationKey: treatment.saturation, kCIInputContrastKey: treatment.contrast,
+            kCIInputBrightnessKey: treatment.brightness
         ])
-        let tint: CIVector
-        switch film {
-        case .daydream: tint = CIVector(x: 0.028, y: 0.012, z: -0.014, w: 0)
-        case .dusk: tint = CIVector(x: -0.012, y: 0.005, z: 0.045, w: 0)
-        case .candy: tint = CIVector(x: 0.035, y: -0.01, z: 0.025, w: 0)
-        case .mono: tint = CIVector(x: 0.018, y: 0.023, z: 0.012, w: 0)
+        output = output.applyingFilter("CIColorMatrix", parameters: ["inputBiasVector": treatment.tint])
+        output = output.clampedToExtent().applyingFilter("CIGaussianBlur", parameters: [kCIInputRadiusKey: treatment.blur]).cropped(to: rect)
+        // Original coefficients, informed by the artifact's halation pass names.
+        output = output.applyingFilter("CIBloom", parameters: [kCIInputRadiusKey: 5.5, kCIInputIntensityKey: treatment.bloom]).cropped(to: rect)
+        if treatment.pixelScale > 1 {
+            output = output.applyingFilter("CIPixellate", parameters: [kCIInputScaleKey: treatment.pixelScale, kCIInputCenterKey: CIVector(x: 240, y: 320)])
         }
-        output = output.applyingFilter("CIColorMatrix", parameters: ["inputBiasVector": tint])
-        output = output.clampedToExtent().applyingFilter("CIGaussianBlur", parameters: [kCIInputRadiusKey: 0.65]).cropped(to: rect)
-        // The analyzed artifact names separate halation extraction, blur and merge controls.
-        // CIBloom provides our own highlight spread treatment.
-        output = output.applyingFilter("CIBloom", parameters: [kCIInputRadiusKey: 5.5, kCIInputIntensityKey: film == .daydream ? 0.18 : 0.09]).cropped(to: rect)
-        output = output.applyingFilter("CIColorPosterize", parameters: ["inputLevels": film == .mono ? 32 : 24])
+        output = output.applyingFilter("CIColorPosterize", parameters: ["inputLevels": treatment.levels])
         if let random = CIFilter(name: "CIRandomGenerator")?.outputImage {
             // Force an opaque, bounded noise image before blending. CIRandomGenerator's
             // random alpha must not be unpremultiplied into highlight spikes.
@@ -55,11 +85,11 @@ final class RetroProcessor {
                 "inputMaxComponents": CIVector(x: 1, y: 1, z: 1, w: 1)
             ]).applyingFilter("CIColorControls", parameters: [kCIInputSaturationKey: 0])
             output = output.applyingFilter("CIDissolveTransition", parameters: [
-                kCIInputTargetImageKey: monochrome.cropped(to: rect), kCIInputTimeKey: 0.045
+                kCIInputTargetImageKey: monochrome.cropped(to: rect), kCIInputTimeKey: treatment.grain
             ])
             let banding = monochrome.transformed(by: CGAffineTransform(scaleX: 480, y: 1)).cropped(to: rect)
             output = output.applyingFilter("CIDissolveTransition", parameters: [
-                kCIInputTargetImageKey: banding, kCIInputTimeKey: 0.018
+                kCIInputTargetImageKey: banding, kCIInputTimeKey: treatment.banding
             ])
         }
         output = output.applyingFilter("CIVignette", parameters: [kCIInputIntensityKey: 0.4, kCIInputRadiusKey: 180])

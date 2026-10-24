@@ -1,128 +1,96 @@
 import SwiftUI
 import PhotosUI
+import AVKit
 
-private let phosphor = Color(red: 0.78, green: 0.87, blue: 0.65)
-private let ink = Color(red: 0.12, green: 0.19, blue: 0.16)
+private enum PhonePage { case camera, options, looks, settings, gallery, viewer }
 
 struct CameraView: View {
     @StateObject private var camera = CameraEngine()
     @StateObject private var library = MediaLibrary()
     @Environment(\.scenePhase) private var scenePhase
-    @State private var film: Film = .daydream
-    @State private var strength = 0.8
-    @State private var videoMode = false
-    @State private var gallery = false
-    @State private var options = false
+    @AppStorage("selectedCameraLook") private var selectedLook = Film.dreamy.rawValue
+    @AppStorage("effectStrength") private var strength = 0.8
+    @State private var mode: CaptureMode = .photo
+    @State private var page: PhonePage = .camera
     @State private var pickerItem: PhotosPickerItem?
-    @State private var toast: String?
-    @State private var flashing = false
+    @State private var pickerPresented = false
+    @State private var importOriginal: UIImage?
+    @State private var importPreview: UIImage?
+    @State private var importTask: Task<Void, Never>?
+    @State private var importProgress = 0.0
     @State private var importing = false
+    @State private var importingMovie = false
+    @State private var renderingImport = false
+    @State private var importGeneration = 0
     @State private var pendingMovie: (URL, UIImage, Film)?
+    @State private var selectedMemory: Memory?
+    @State private var player: AVPlayer?
     @State private var movieHandlerSet = false
+    @State private var toast: String?
     @State private var toastTask: Task<Void, Never>?
+    @State private var flashing = false
+    @State private var exporting = false
 
+    private let ink = Color(red: 0.07, green: 0.12, blue: 0.18)
+    private let paper = Color(red: 0.79, green: 0.87, blue: 0.90)
+    private let highlight = Color(red: 0.12, green: 0.29, blue: 0.54)
+    private var film: Film { Film(rawValue: selectedLook).flatMap { Film.cameraLooks.contains($0) ? $0 : nil } ?? .dreamy }
     private var busy: Bool { camera.isRecording || camera.isFinishing || importing || pendingMovie != nil }
+    private var centerTitle: String {
+        if page != .camera {
+            switch page {
+            case .viewer: return "Save"
+            case .gallery: return "Open"
+            case .settings: return "Done"
+            default: return "Select"
+            }
+        }
+        if camera.isRecording { return "Stop" }
+        if mode == .video { return "Record" }
+        if mode == .imported { return importOriginal == nil ? "Open" : "Save" }
+        return "Capture"
+    }
+
     var body: some View {
         GeometryReader { geometry in
-            let compact = geometry.size.height < 730
-            VStack(spacing: compact ? 14 : 23) {
-                masthead
-                VStack(spacing: 0) {
-                    HStack {
-                        Image(systemName: "antenna.radiowaves.left.and.right")
-                        Text(camera.isDemo ? "DEMO / NO CAMERA" : "POCKET NETWORK")
-                        Spacer()
-                        Text(Date(), style: .time)
-                        Image(systemName: "battery.100percent")
-                    }
-                    .font(.system(size: 10, weight: .bold, design: .monospaced))
-                    .padding(.horizontal, 13).frame(height: 31)
-                    .foregroundStyle(ink).background(phosphor)
-                    viewfinder
-                    HStack {
-                        Text(videoMode ? "MOVIE · SILENT" : "PHOTO · 480 × 640")
-                        Spacer()
-                        Text(String(format: "%03d", library.memories.count))
-                        Image(systemName: "square.stack")
-                    }
-                    .font(.system(size: 11, weight: .semibold, design: .monospaced))
-                    .foregroundStyle(ink).padding(.horizontal, 13).frame(height: 34).background(phosphor)
+            VStack(spacing: 0) {
+                statusBar
+                if page == .camera {
+                    modeBar
+                    viewfinder.frame(maxWidth: .infinity, maxHeight: .infinity)
+                    lookSelector
+                    infoBar
+                } else {
+                    titleBar
+                    pageContents.frame(maxWidth: .infinity, maxHeight: .infinity, alignment: .top)
                 }
-                .clipShape(RoundedRectangle(cornerRadius: 9))
-                .overlay(RoundedRectangle(cornerRadius: 9).stroke(.black, lineWidth: 3))
-                .padding(7).background(RoundedRectangle(cornerRadius: 15).fill(Color.black.opacity(0.5)))
-                .overlay(RoundedRectangle(cornerRadius: 15).stroke(.white.opacity(0.08)))
-
-                HStack {
-                    Button { withAnimation { videoMode.toggle() } } label: {
-                        Label(videoMode ? "VIDEO" : "PHOTO", systemImage: videoMode ? "video" : "camera")
-                            .font(.system(size: 11, weight: .bold, design: .monospaced))
-                    }.disabled(busy).accessibilityIdentifier("mode")
-                    Spacer()
-                    Button { options = true } label: {
-                        HStack(spacing: 6) { Circle().fill(phosphor).frame(width: 5, height: 5); Text(film.rawValue); Image(systemName: "chevron.down") }
-                            .font(.system(size: 11, weight: .bold, design: .monospaced))
-                    }.disabled(busy)
-                }.foregroundStyle(phosphor).padding(.horizontal, 7)
-
-                HStack(spacing: 0) {
-                    Button { gallery = true } label: {
-                        VStack(spacing: 9) {
-                            ZStack {
-                                RoundedRectangle(cornerRadius: 7).fill(.white.opacity(0.05)).frame(width: 49, height: 42)
-                                if let last = library.memories.first, let image = library.thumbnail(last) {
-                                    Image(uiImage: image).resizable().scaledToFill().frame(width: 41, height: 34).clipped().clipShape(RoundedRectangle(cornerRadius: 3))
-                                } else { Image(systemName: "square.stack").font(.system(size: 19)) }
-                            }
-                            Text("MEMORIES").font(.system(size: 9, weight: .medium, design: .monospaced))
-                        }.frame(maxWidth: .infinity)
-                    }.disabled(camera.isRecording || camera.isFinishing).accessibilityIdentifier("memories")
-                    Button(action: shutter) {
-                        ZStack {
-                            Circle().fill(LinearGradient(colors: [Color(white: 0.40), Color(white: 0.16)], startPoint: .topLeading, endPoint: .bottomTrailing)).frame(width: 91, height: 91)
-                            Circle().stroke(.black.opacity(0.8), lineWidth: 2).frame(width: 83, height: 83)
-                            Circle().fill(camera.isRecording ? Color(red: 0.9, green: 0.27, blue: 0.17) : phosphor).frame(width: 69, height: 69)
-                                .shadow(color: .black.opacity(0.5), radius: 2, y: 3)
-                            if camera.isRecording { RoundedRectangle(cornerRadius: 3).fill(ink).frame(width: 23, height: 23) }
-                            else { Image(systemName: videoMode ? "video.fill" : "camera.aperture").font(.system(size: 28, weight: .light)).foregroundStyle(ink) }
-                        }
-                    }.buttonStyle(.plain).disabled(camera.preview == nil || camera.isFinishing || importing || pendingMovie != nil)
-                        .accessibilityLabel(camera.isRecording ? "Stop recording" : videoMode ? "Record silent video" : "Capture photo").accessibilityIdentifier("shutter")
-                    PhotosPicker(selection: $pickerItem, matching: .images) {
-                        VStack(spacing: 9) {
-                            Image(systemName: "arrow.down.to.line.compact").font(.system(size: 24, weight: .light)).frame(height: 42)
-                            Text(importing ? "IMPORTING" : "IMPORT").font(.system(size: 9, weight: .medium, design: .monospaced))
-                        }.frame(maxWidth: .infinity)
-                    }.disabled(busy).accessibilityIdentifier("import")
-                }.foregroundStyle(Color(white: 0.72))
-                HStack(spacing: 10) {
-                    Capsule().fill(.white.opacity(0.12)).frame(width: 35, height: 3)
-                    Text("LIFE LOOKED GOOD IN LOW RES.").font(.system(size: 8, weight: .medium, design: .monospaced)).tracking(1.7)
-                    Capsule().fill(.white.opacity(0.12)).frame(width: 35, height: 3)
-                }.foregroundStyle(Color(white: 0.42))
+                softKeys
             }
-            .padding(.horizontal, 23).padding(.top, compact ? 8 : 14).padding(.bottom, 12)
-            .frame(maxWidth: 500).frame(maxWidth: .infinity, maxHeight: .infinity)
+            .frame(width: geometry.size.width, height: geometry.size.height)
+            .background(paper, ignoresSafeAreaEdges: [])
+            .overlay(Rectangle().stroke(Color.white.opacity(0.3), lineWidth: 1).allowsHitTesting(false))
         }
-        .background(LinearGradient(colors: [Color(white: 0.16), Color(white: 0.075)], startPoint: .topLeading, endPoint: .bottomTrailing).ignoresSafeArea())
-        .sheet(isPresented: $gallery) { GalleryView(library: library) }
-        .sheet(isPresented: $options) { filmSheet.presentationDetents([.height(390)]) }
+        .background(Color.black.ignoresSafeArea())
+        .overlay {
+            if page != .camera, let toast {
+                Text(toast).font(pixel(27)).foregroundStyle(ink).padding(13).background(paper).overlay(Rectangle().stroke(highlight, lineWidth: 2))
+            }
+        }
+        .statusBarHidden()
+        .preferredColorScheme(.light)
+        .photosPicker(isPresented: $pickerPresented, selection: $pickerItem, matching: .any(of: [.images, .videos]))
         .alert("Pocket03", isPresented: Binding(get: { camera.error != nil }, set: { if !$0 { camera.error = nil } })) {
-            if pendingMovie != nil {
-                Button("Retry saving movie") {
-                    camera.error = nil
-                    if let movie = pendingMovie { saveMovie(movie.0, thumbnail: movie.1, film: movie.2) }
-                }
+            if let movie = pendingMovie {
+                Button("Retry saving movie") { camera.error = nil; saveMovie(movie.0, thumbnail: movie.1, film: movie.2) }
             }
             Button("OK") { camera.error = nil }
         } message: { Text(camera.error ?? "") }
         .onAppear {
+            camera.update(film: film, strength: strength)
             if !movieHandlerSet {
-                camera.onMovie = { url, thumbnail, film in
-                    saveMovie(url, thumbnail: thumbnail, film: film)
-                }
+                camera.onMovie = { url, thumbnail, film in saveMovie(url, thumbnail: thumbnail, film: film) }
                 movieHandlerSet = true
-                if let error = library.loadError { camera.error = "Could not load memories: \(error)" }
+                if let error = library.loadError { camera.error = "Could not load gallery: \(error)" }
             }
             camera.start()
         }
@@ -130,120 +98,292 @@ struct CameraView: View {
             if phase == .active { camera.start() }
             else if phase == .background { camera.stop() }
         }
-        .onChange(of: film) { _, _ in camera.update(film: film, strength: strength) }
-        .onChange(of: strength) { _, _ in camera.update(film: film, strength: strength) }
-        .onChange(of: pickerItem) { _, item in
-            guard let item else { return }
-            importing = true
-            Task {
-                do {
-                    guard let data = try await item.loadTransferable(type: Data.self), let image = UIImage(data: data) else {
-                        throw CocoaError(.fileReadCorruptFile)
-                    }
-                    camera.importPhoto(image) { processed in
-                        defer { importing = false; pickerItem = nil }
-                        save(processed)
-                    }
-                } catch { importing = false; pickerItem = nil; camera.error = error.localizedDescription }
+        .onChange(of: selectedLook) { _, _ in applyTreatment() }
+        .onChange(of: strength) { _, _ in applyTreatment() }
+        .onChange(of: pickerItem) { _, item in if let item { loadImport(item) } }
+        .onChange(of: page) { _, newPage in if newPage != .viewer { player?.pause(); player = nil } }
+        .onDisappear { importTask?.cancel() }
+    }
+
+    private func pixel(_ size: CGFloat) -> Font { .custom("VT323-Regular", size: size) }
+    private var chrome: LinearGradient { LinearGradient(colors: [Color(red: 0.87, green: 0.94, blue: 0.96), paper, Color(red: 0.68, green: 0.79, blue: 0.85)], startPoint: .topLeading, endPoint: .bottomTrailing) }
+
+    private var statusBar: some View {
+        HStack(spacing: 7) {
+            HStack(alignment: .bottom, spacing: 2) {
+                ForEach(0..<4) { i in Rectangle().fill(ink).frame(width: 3, height: CGFloat(4 + i * 3)) }
+            }.accessibilityHidden(true)
+            HStack(spacing: 1) { ForEach(0..<4) { _ in Rectangle().fill(Color(red: 0.17, green: 0.6, blue: 0.14)).frame(width: 3, height: 8) } }
+                .padding(2).overlay(Rectangle().stroke(ink, lineWidth: 1)).accessibilityHidden(true)
+            Image(systemName: camera.torchOn ? "bolt.fill" : "camera.fill").font(.system(size: 11)).accessibilityHidden(true)
+            if camera.isRecording { Text("REC").foregroundStyle(.red) }
+            Spacer()
+            if camera.isDemo { Text("DEMO").font(pixel(16)).foregroundStyle(highlight) }
+            Text(Date(), format: .dateTime.hour(.twoDigits(amPM: .omitted)).minute(.twoDigits)).font(pixel(26))
+        }
+        .font(pixel(19)).foregroundStyle(ink).padding(.horizontal, 10).frame(height: 31).background(chrome)
+        .overlay(alignment: .bottom) { Rectangle().fill(.white.opacity(0.6)).frame(height: 1) }
+    }
+    private var modeBar: some View {
+        HStack(spacing: 0) {
+            ForEach(CaptureMode.allCases) { item in
+                Button { setMode(item) } label: {
+                    Text(item.rawValue).font(pixel(23)).frame(maxWidth: .infinity).frame(height: 33)
+                        .background(mode == item ? highlight : .clear).foregroundStyle(mode == item ? .white : ink)
+                }.buttonStyle(.plain).disabled(busy || renderingImport)
+                    .accessibilityIdentifier("mode-\(item.rawValue.lowercased())")
+                    .accessibilityAddTraits(mode == item ? .isSelected : [])
             }
+        }.background(paper)
+    }
+    private var lookSelector: some View {
+        HStack(spacing: 0) {
+            Button { cycleLook(-1) } label: { Text("◀").font(pixel(22)).frame(width: 42, height: 43) }.accessibilityLabel("Previous camera look")
+            Button { page = .looks } label: {
+                VStack(spacing: 0) {
+                    Text(film.rawValue).font(pixel(25)).lineLimit(1).minimumScaleFactor(0.7)
+                    Text("\((Film.cameraLooks.firstIndex(of: film) ?? 0) + 1) / 3").font(pixel(14)).foregroundStyle(highlight)
+                }.frame(maxWidth: .infinity, minHeight: 43)
+            }.accessibilityIdentifier("look-selector")
+            Button { cycleLook(1) } label: { Text("▶").font(pixel(22)).frame(width: 42, height: 43) }.accessibilityLabel("Next camera look")
+        }.foregroundStyle(ink).background(chrome).disabled(busy)
+    }
+    private var infoBar: some View {
+        HStack {
+            Text(mode == .video ? "480×640 · silent video" : mode == .imported ? "Photo & video import" : "0.3 MP · 480×640")
+            Spacer()
+            Text(String(format: "%03d", library.memories.count)).accessibilityIdentifier("gallery-count")
+        }.font(pixel(17)).foregroundStyle(highlight).padding(.horizontal, 10).frame(height: 23).background(paper)
+    }
+    private var viewfinder: some View {
+        GeometryReader { geometry in
+            ZStack {
+                Color.black
+                if let image = mode == .imported ? importPreview : camera.preview {
+                    Image(uiImage: image).resizable().interpolation(.none).scaledToFit()
+                        .frame(width: geometry.size.width, height: geometry.size.height)
+                } else {
+                    VStack(spacing: 18) {
+                        Image(systemName: mode == .imported ? "photo.on.rectangle.angled" : "camera").font(.system(size: 32, weight: .light))
+                        Text(mode == .imported ? "Import a photo or video\nChoose a look. Make it a memory." : camera.cameraMessage ?? "Starting camera…")
+                            .font(pixel(24)).multilineTextAlignment(.center)
+                        if mode == .imported {
+                            Button("Open gallery") { pickerPresented = true }.font(pixel(25)).padding(10).background(highlight)
+                        } else if camera.cameraMessage != nil {
+                            Button("Open Settings") { if let url = URL(string: UIApplication.openSettingsURLString) { UIApplication.shared.open(url) } }.font(pixel(23))
+                        }
+                    }.padding(25).foregroundStyle(.white)
+                }
+                if camera.isRecording {
+                    VStack { HStack {
+                        Text(String(format: "%02d:%02d", camera.recordingSeconds / 60, camera.recordingSeconds % 60))
+                            .font(pixel(28)).padding(5).background(.black.opacity(0.6)).accessibilityIdentifier("recording-time")
+                        Spacer(); Text("● REC").foregroundStyle(.red).font(pixel(24))
+                    }; Spacer() }.padding(12).foregroundStyle(.white)
+                }
+                if importing {
+                    VStack(spacing: 14) {
+                        Text(importingMovie ? "Processing video… \(Int(importProgress * 100))%" : "Loading photo…").font(pixel(25))
+                        ProgressView(value: importProgress).tint(.white)
+                        Text(importingMovie ? "\(film.rawValue) · silent output" : film.rawValue).font(pixel(18))
+                        Button("Cancel") { importTask?.cancel() }.font(pixel(24)).padding(8)
+                    }.padding(25).foregroundStyle(.white).background(highlight.opacity(0.95))
+                } else if renderingImport || camera.isFinishing {
+                    Text(camera.isFinishing ? "Saving video…" : "Processing…").font(pixel(25)).padding(15).foregroundStyle(ink).background(paper)
+                }
+                if let toast { Text(toast).font(pixel(27)).foregroundStyle(ink).padding(13).background(paper).overlay(Rectangle().stroke(highlight, lineWidth: 2)).transition(.opacity) }
+                if let movie = pendingMovie {
+                    Button("Retry saving video") { saveMovie(movie.0, thumbnail: movie.1, film: movie.2) }.font(pixel(25)).padding(15).foregroundStyle(ink).background(paper)
+                }
+                if flashing { Color.white.opacity(0.85) }
+            }.frame(width: geometry.size.width, height: geometry.size.height).clipped()
         }
     }
-
-    private var masthead: some View {
-        HStack(alignment: .center) {
-            HStack(alignment: .firstTextBaseline, spacing: 3) {
-                Text("pocket").font(.system(size: 26, weight: .black, design: .rounded)).tracking(-1.4)
-                Text("03").font(.system(size: 26, weight: .ultraLight, design: .monospaced)).foregroundStyle(phosphor)
-            }.foregroundStyle(Color(white: 0.88))
-            Spacer()
-            VStack(alignment: .trailing, spacing: 5) {
-                Text("DIGITAL PRIMITIVISM").font(.system(size: 7, weight: .semibold, design: .monospaced)).tracking(1.5)
-                HStack(spacing: 3) { ForEach(0..<6) { _ in Capsule().fill(.black.opacity(0.55)).frame(width: 3, height: 12) } }
-            }.foregroundStyle(Color(white: 0.5))
-        }.padding(.horizontal, 7)
+    private var titleBar: some View {
+        Text(page == .options ? "Options" : page == .looks ? "Processing" : page == .settings ? "Settings" : page == .gallery ? "Gallery" : "Memory")
+            .font(pixel(29)).foregroundStyle(.white).frame(maxWidth: .infinity).frame(height: 38)
+            .background(LinearGradient(colors: [highlight, Color(red: 0.23, green: 0.43, blue: 0.65)], startPoint: .top, endPoint: .bottom))
     }
-
-    private var viewfinder: some View {
-        ZStack {
-            Color.black
-            if let image = camera.preview {
-                Image(uiImage: image).resizable().interpolation(.none).scaledToFill()
-            } else {
-                VStack(spacing: 15) {
-                    Image(systemName: "camera.aperture").font(.system(size: 34, weight: .ultraLight))
-                    Text(camera.cameraMessage ?? "WAKING UP THE CAMERA…")
-                        .font(.system(size: 12, design: .monospaced)).multilineTextAlignment(.center)
-                    if camera.cameraMessage != nil {
-                        Button("OPEN SETTINGS") { if let url = URL(string: UIApplication.openSettingsURLString) { UIApplication.shared.open(url) } }
-                            .font(.system(size: 11, weight: .bold, design: .monospaced))
-                    }
-                }.padding(30).foregroundStyle(phosphor)
+    @ViewBuilder private var pageContents: some View {
+        switch page {
+        case .options:
+            VStack(spacing: 0) {
+                menuRow("1", "Photo camera", icon: "camera") { setMode(.photo); page = .camera }
+                menuRow("2", "Video camera", icon: "video") { setMode(.video); page = .camera }
+                menuRow("3", "Import photo / video", icon: "square.and.arrow.down") { setMode(.imported); page = .camera; pickerPresented = true }
+                menuRow("4", "Processing", icon: "slider.horizontal.3") { page = .looks }
+                menuRow("5", "Settings", icon: "gearshape") { page = .settings }
+                menuRow("6", "Gallery", icon: "photo.on.rectangle") { page = .gallery }
+                Spacer()
+                Text("Pocket03\nSmall pictures. Long memories.").font(pixel(21)).multilineTextAlignment(.center).foregroundStyle(highlight).padding(24)
             }
-            VStack {
-                HStack {
-                    if camera.isRecording {
-                        Label(String(format: "%02d:%02d", camera.recordingSeconds / 60, camera.recordingSeconds % 60), systemImage: "record.circle.fill").foregroundStyle(.red)
-                    } else { Text("[ \(film.rawValue) ]") }
-                    Spacer()
-                    Button { camera.toggleTorch() } label: { Image(systemName: camera.torchOn ? "bolt.fill" : "bolt.slash") }
-                        .disabled(camera.isDemo).accessibilityLabel("Toggle torch")
+        case .looks:
+            VStack(spacing: 0) {
+                ForEach(Array(Film.cameraLooks.enumerated()), id: \.element.id) { index, look in
+                    Button { selectedLook = look.rawValue; page = .camera } label: {
+                        HStack(alignment: .top, spacing: 10) {
+                            Text("\(index + 1)").frame(width: 20)
+                            VStack(alignment: .leading, spacing: 6) { Text(look.rawValue).font(pixel(27)); Text(look.subtitle).font(pixel(18)) }
+                            Spacer(minLength: 0)
+                            if film == look { Text("✓") }
+                        }.padding(14).frame(maxWidth: .infinity, alignment: .leading)
+                            .foregroundStyle(film == look ? .white : ink).background(film == look ? highlight : .clear)
+                    }.buttonStyle(.plain).accessibilityIdentifier("look-\(index)")
                 }
                 Spacer()
-                HStack {
-                    Button { camera.setZoom(camera.zoom >= 3 ? 1 : camera.zoom + 1) } label: { Text(String(format: "%.0f×", camera.zoom)).padding(9).background(.black.opacity(0.35), in: Circle()) }
-                        .disabled(camera.isDemo).accessibilityLabel("Digital zoom")
-                    Spacer()
-                    if camera.isDemo { Text("SIMULATOR SCENE").font(.system(size: 8, design: .monospaced)) }
-                    Spacer()
-                    Button { camera.flip() } label: { Image(systemName: "arrow.triangle.2.circlepath.camera").font(.system(size: 19)).padding(7).background(.black.opacity(0.35), in: Circle()) }
-                        .disabled(camera.isDemo || camera.isRecording).accessibilityLabel("Switch camera")
-                }
-            }.font(.system(size: 10, weight: .bold, design: .monospaced)).foregroundStyle(.white.opacity(0.9))
-                .shadow(color: .black.opacity(0.6), radius: 2).padding(13)
-            // A focus reticle is decorative; it does not pretend to be autofocus control.
-            Rectangle().stroke(.white.opacity(0.38), lineWidth: 0.7).frame(width: 43, height: 43)
-            if let toast {
-                Text(toast).font(.system(size: 11, weight: .bold, design: .monospaced)).padding(14).foregroundStyle(ink).background(phosphor).transition(.opacity)
+                Text("Recreated looks, inspired by early phone cameras.").font(pixel(20)).foregroundStyle(highlight).multilineTextAlignment(.center).padding(22)
+            }.font(pixel(26))
+        case .settings:
+            VStack(spacing: 0) {
+                menuRow("1", "Switch camera", icon: "arrow.triangle.2.circlepath.camera") { camera.flip(); page = .camera }.disabled(camera.isDemo)
+                menuRow("2", camera.torchOn ? "Torch: On" : "Torch: Off", icon: "bolt") { camera.toggleTorch() }.disabled(camera.isDemo)
+                menuRow("3", "Zoom: \(Int(camera.zoom))×", icon: "plus.magnifyingglass") { camera.setZoom(camera.zoom >= 3 ? 1 : camera.zoom + 1) }.disabled(camera.isDemo)
+                VStack(alignment: .leading, spacing: 12) {
+                    Text("Effect strength: \(Int(strength * 100))%").font(pixel(25))
+                    Slider(value: $strength, in: 0...1).tint(highlight).accessibilityLabel("Effect strength")
+                }.padding(17)
+                Spacer()
+                Text("Video is recorded without sound.\nPhotos stay on your iPhone until you share them.").font(pixel(21)).foregroundStyle(highlight).multilineTextAlignment(.center).padding(22)
             }
-            if let movie = pendingMovie {
-                Button("RETRY MOVIE SAVE") { saveMovie(movie.0, thumbnail: movie.1, film: movie.2) }
-                    .font(.system(size: 12, weight: .bold, design: .monospaced))
-                    .padding(15).foregroundStyle(ink).background(phosphor)
-            }
-            if importing || camera.isFinishing { ProgressView().tint(phosphor).padding(20).background(.black.opacity(0.7), in: RoundedRectangle(cornerRadius: 8)) }
-            if flashing { Color.white.opacity(0.8) }
-        }.aspectRatio(3 / 4, contentMode: .fit).clipped()
-    }
-    private var filmSheet: some View {
-        VStack(alignment: .leading, spacing: 18) {
-            HStack { Text("CHOOSE YOUR MEMORY").font(.system(size: 13, weight: .bold, design: .monospaced)); Spacer(); Button("Done") { options = false } }
-            ForEach(Film.allCases) { item in
-                Button { film = item } label: {
-                    HStack {
-                        VStack(alignment: .leading, spacing: 3) {
-                            Text(item.rawValue).font(.system(size: 12, weight: .bold, design: .monospaced))
-                            Text(item.subtitle).font(.system(size: 11)).foregroundStyle(.secondary)
+        case .gallery:
+            if library.memories.isEmpty {
+                VStack(spacing: 20) { Image(systemName: "photo.on.rectangle").font(.system(size: 40)); Text("No images or videos.\nCapture or import a memory.").font(pixel(25)).multilineTextAlignment(.center) }.padding(.top, 80).foregroundStyle(highlight)
+            } else {
+                ScrollView {
+                    LazyVGrid(columns: [GridItem(.flexible()), GridItem(.flexible())], spacing: 12) {
+                        ForEach(library.memories) { memory in
+                            Button { openMemory(memory) } label: {
+                                VStack(alignment: .leading, spacing: 4) {
+                                    if let image = library.thumbnail(memory) { Image(uiImage: image).resizable().interpolation(.none).aspectRatio(3 / 4, contentMode: .fit).border(.white, width: 2) }
+                                    Text(memory.isVideo ? "▶ Video" : "▣ Image").font(pixel(22))
+                                    Text(memory.date, format: .dateTime.day().month()).font(pixel(18))
+                                }.foregroundStyle(ink)
+                            }.buttonStyle(.plain).accessibilityIdentifier("memory-\(memory.id)")
                         }
-                        Spacer()
-                        Image(systemName: film == item ? "largecircle.fill.circle" : "circle")
-                    }.foregroundStyle(film == item ? phosphor : .white)
+                    }.padding(12)
                 }
             }
-            HStack { Text("CHARACTER"); Spacer(); Text("\(Int(strength * 100))%") }.font(.system(size: 10, design: .monospaced))
-            Slider(value: $strength, in: 0...1).tint(phosphor).accessibilityLabel("Effect strength")
-        }.padding(25).presentationDragIndicator(.visible)
-    }
-    private func shutter() {
-        UIImpactFeedbackGenerator(style: .medium).impactOccurred()
-        if videoMode { camera.toggleRecording() }
-        else {
-            flashing = true
-            DispatchQueue.main.asyncAfter(deadline: .now() + 0.10) { flashing = false }
-            camera.capture { save($0) }
+        case .viewer:
+            if let memory = selectedMemory {
+                VStack(spacing: 12) {
+                    if memory.isVideo { VideoPlayer(player: player).aspectRatio(3 / 4, contentMode: .fit) }
+                    else if let image = library.thumbnail(memory) { Image(uiImage: image).resizable().interpolation(.none).aspectRatio(3 / 4, contentMode: .fit) }
+                    Text(memory.film.rawValue).font(pixel(25))
+                    Text(memory.isVideo ? "480×640 · silent video" : "480×640 · JPEG").font(pixel(19))
+                    ShareLink(item: library.url(memory)) { Text("Send / Share").font(pixel(26)).padding(10) }
+                    Spacer(minLength: 0)
+                }.padding(12).foregroundStyle(ink)
+            }
+        case .camera: EmptyView()
         }
     }
-    private func save(_ image: UIImage?) {
-        guard let image else { camera.error = "The image could not be processed. Please try again."; return }
+    private func menuRow(_ number: String, _ title: String, icon: String, action: @escaping () -> Void) -> some View {
+        Button(action: action) {
+            HStack(spacing: 12) {
+                Text(number).font(pixel(25)).foregroundStyle(highlight).frame(width: 20)
+                Image(systemName: icon).font(.system(size: 17)).frame(width: 23)
+                Text(title).font(pixel(27)); Spacer(minLength: 0)
+                Text("›").font(pixel(27))
+            }.foregroundStyle(ink).padding(.horizontal, 12).frame(minHeight: 53)
+                .background(page == .options && number == "1" ? Color.white.opacity(0.7) : Color.white.opacity(0.18))
+                .overlay(alignment: .bottom) { Rectangle().fill(highlight.opacity(0.15)).frame(height: 1) }
+        }.buttonStyle(.plain)
+    }
+    private var softKeys: some View {
+        HStack(spacing: 0) {
+            Button { leftKey() } label: { Text(page == .camera ? "Gallery" : "Camera").font(pixel(26)).frame(maxWidth: .infinity, minHeight: 54) }
+                .accessibilityIdentifier("memories").disabled(busy || renderingImport)
+            Button { centerKey() } label: { Text(centerTitle).font(pixel(32)).frame(maxWidth: .infinity, minHeight: 54) }
+                .accessibilityIdentifier("shutter").disabled(centerDisabled)
+            Button { rightKey() } label: { Text(page == .camera ? "Options" : "Back").font(pixel(26)).frame(maxWidth: .infinity, minHeight: 54) }
+                .accessibilityIdentifier("options").disabled(busy || renderingImport)
+        }.buttonStyle(.plain).foregroundStyle(ink).background(chrome)
+            .overlay(alignment: .top) { Rectangle().fill(.white.opacity(0.7)).frame(height: 1) }
+    }
+    private var centerDisabled: Bool {
+        if page == .viewer { return exporting }
+        if page != .camera { return busy || renderingImport || (page == .gallery && library.memories.isEmpty) }
+        if camera.isRecording { return false }
+        return busy || renderingImport || (mode != .imported && camera.preview == nil)
+    }
+    private func leftKey() { page = page == .camera ? .gallery : .camera }
+    private func rightKey() { page = page == .camera ? .options : page == .viewer ? .gallery : .camera }
+    private func setMode(_ newMode: CaptureMode) { guard !busy, !renderingImport else { return }; mode = newMode }
+    private func cycleLook(_ direction: Int) {
+        guard !busy else { return }
+        let current = Film.cameraLooks.firstIndex(of: film) ?? 0
+        selectedLook = Film.cameraLooks[(current + direction + 3) % 3].rawValue
+    }
+    private func centerKey() {
+        if page == .viewer, let memory = selectedMemory {
+            guard !exporting else { return }
+            exporting = true
+            Task {
+                defer { exporting = false }
+                do { try await library.export(memory); showToast("Saved to Photos") }
+                catch { camera.error = error.localizedDescription }
+            }
+            return
+        }
+        if page == .gallery, let memory = library.memories.first { openMemory(memory); return }
+        if page == .options { setMode(.photo); page = .camera; return }
+        if page == .looks || page == .settings { page = .camera; return }
+        guard page == .camera else { return }
+        UIImpactFeedbackGenerator(style: .light).impactOccurred()
+        if mode == .video { camera.toggleRecording() }
+        else if mode == .imported {
+            if let image = importPreview { savePhoto(image) }
+            else { pickerPresented = true }
+        } else {
+            flashing = true
+            DispatchQueue.main.asyncAfter(deadline: .now() + 0.1) { flashing = false }
+            camera.capture { image in if let image { savePhoto(image) } else { camera.error = "The camera is not ready. Please try again." } }
+        }
+    }
+    private func openMemory(_ memory: Memory) {
+        selectedMemory = memory
+        if memory.isVideo { player = AVPlayer(url: library.url(memory)); player?.play() }
+        page = .viewer
+    }
+    private func applyTreatment() {
+        camera.update(film: film, strength: strength)
+        guard let image = importOriginal else { return }
+        importGeneration += 1
+        let generation = importGeneration
+        renderingImport = true
+        camera.importPhoto(image) { result in
+            guard generation == importGeneration else { return }
+            renderingImport = false
+            importPreview = result
+            if result == nil { camera.error = "This photo could not be processed." }
+        }
+    }
+    private func loadImport(_ item: PhotosPickerItem) {
+        guard !busy else { return }
+        mode = .imported; page = .camera
+        let chosenFilm = film, chosenStrength = strength
+        importing = true; importProgress = 0
+        importingMovie = item.supportedContentTypes.contains(where: { $0.conforms(to: .movie) })
+        importTask = Task {
+            defer { importing = false; pickerItem = nil; importTask = nil }
+            do {
+                if importingMovie {
+                    guard let movie = try await item.loadTransferable(type: PickedMovie.self) else { throw CocoaError(.fileReadCorruptFile) }
+                    defer { try? FileManager.default.removeItem(at: movie.url) }
+                    let result = try await VideoImporter().process(url: movie.url, film: chosenFilm, strength: chosenStrength) { importProgress = $0 }
+                    importOriginal = nil; importPreview = nil
+                    saveMovie(result.url, thumbnail: result.thumbnail, film: chosenFilm)
+                } else {
+                    guard let data = try await item.loadTransferable(type: Data.self), let image = UIImage(data: data) else { throw CocoaError(.fileReadCorruptFile) }
+                    try Task.checkCancellation()
+                    importOriginal = image
+                    applyTreatment()
+                }
+            } catch is CancellationError { showToast("Import cancelled") }
+            catch { camera.error = "Import failed. " + error.localizedDescription }
+        }
+    }
+    private func savePhoto(_ image: UIImage) {
         do { try library.savePhoto(image, film: film); showToast("MEMORY SAVED") }
         catch { camera.error = error.localizedDescription }
     }
@@ -255,7 +395,7 @@ struct CameraView: View {
             showToast("MOVIE SAVED")
         } catch {
             pendingMovie = (url, thumbnail, film)
-            camera.error = "The movie is still kept temporarily. Free some space and retry saving. " + error.localizedDescription
+            camera.error = "Your movie is kept temporarily. Free some space, then retry saving. " + error.localizedDescription
         }
     }
     private func showToast(_ text: String) {

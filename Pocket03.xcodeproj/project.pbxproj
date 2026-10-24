@@ -7,15 +7,18 @@
 	objects = {
 
 /* Begin PBXBuildFile section */
+		13C96601C175FE76046D67C5 /* ImportedMovie.swift in Sources */ = {isa = PBXBuildFile; fileRef = 4ED4D23BAEE9CA6B82AC08B1 /* ImportedMovie.swift */; };
 		236AEEA8D88E08DEDA050FF5 /* CameraEngine.swift in Sources */ = {isa = PBXBuildFile; fileRef = 4D40D012811EAA05C05904D1 /* CameraEngine.swift */; };
 		2C5DF2604678F2015E3D69DC /* Pocket03App.swift in Sources */ = {isa = PBXBuildFile; fileRef = E42EF1A34581B21B6CB6046A /* Pocket03App.swift */; };
 		43AAD7C5779CA8B6181CA92A /* MediaLibrary.swift in Sources */ = {isa = PBXBuildFile; fileRef = 08C4176DA0A36DE239B5FB7A /* MediaLibrary.swift */; };
+		7CDBF75FF0BCD96D3DEDFE8B /* OFL.txt in Resources */ = {isa = PBXBuildFile; fileRef = 1E4D4E80A1C382A13F0929DB /* OFL.txt */; };
 		A9E0F9355B716C94DDC35F21 /* RetroProcessor.swift in Sources */ = {isa = PBXBuildFile; fileRef = 371FE0D65E7AE9F89771BB9A /* RetroProcessor.swift */; };
-		AE58B05F3FC67A2118620FF4 /* GalleryView.swift in Sources */ = {isa = PBXBuildFile; fileRef = 2A29C285F0AF8F3DDDCFC8E2 /* GalleryView.swift */; };
 		BE217A558D642742311F91BA /* CameraView.swift in Sources */ = {isa = PBXBuildFile; fileRef = 26C207B82BCBAF2B3A8EE76C /* CameraView.swift */; };
 		BEE438B420B1A28B09C84239 /* CameraFlowTests.swift in Sources */ = {isa = PBXBuildFile; fileRef = 887DEEAC97EF439987B3398E /* CameraFlowTests.swift */; };
 		DC8EFC6D6BEB439A289B0735 /* Pocket03Tests.swift in Sources */ = {isa = PBXBuildFile; fileRef = A59B31FD539DB4D812D1CE6E /* Pocket03Tests.swift */; };
 		E0F548C87D75E3F2BED159B7 /* Assets.xcassets in Resources */ = {isa = PBXBuildFile; fileRef = CA934C843F77B754A234071E /* Assets.xcassets */; };
+		E716F4C9A901EBCA72D2B960 /* VT323-Regular.ttf in Resources */ = {isa = PBXBuildFile; fileRef = AE511EA41903CFD4641976E4 /* VT323-Regular.ttf */; };
+		EF2AF50472462525E2AE141D /* VideoImporter.swift in Sources */ = {isa = PBXBuildFile; fileRef = 25F58C72C678675840B685DF /* VideoImporter.swift */; };
 /* End PBXBuildFile section */
 
 /* Begin PBXContainerItemProxy section */
@@ -37,30 +40,46 @@
 
 /* Begin PBXFileReference section */
 		08C4176DA0A36DE239B5FB7A /* MediaLibrary.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = MediaLibrary.swift; sourceTree = "<group>"; };
+		1E4D4E80A1C382A13F0929DB /* OFL.txt */ = {isa = PBXFileReference; lastKnownFileType = text; path = OFL.txt; sourceTree = "<group>"; };
+		25F58C72C678675840B685DF /* VideoImporter.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = VideoImporter.swift; sourceTree = "<group>"; };
 		268D697F8D6BF7784C286C61 /* Pocket03Tests.xctest */ = {isa = PBXFileReference; includeInIndex = 0; lastKnownFileType = wrapper.cfbundle; path = Pocket03Tests.xctest; sourceTree = BUILT_PRODUCTS_DIR; };
 		26C207B82BCBAF2B3A8EE76C /* CameraView.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = CameraView.swift; sourceTree = "<group>"; };
-		2A29C285F0AF8F3DDDCFC8E2 /* GalleryView.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = GalleryView.swift; sourceTree = "<group>"; };
+		342BFB412CD9209DBA23F2A5 /* Info.plist */ = {isa = PBXFileReference; lastKnownFileType = text.plist; path = Info.plist; sourceTree = "<group>"; };
 		371FE0D65E7AE9F89771BB9A /* RetroProcessor.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = RetroProcessor.swift; sourceTree = "<group>"; };
 		4D40D012811EAA05C05904D1 /* CameraEngine.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = CameraEngine.swift; sourceTree = "<group>"; };
+		4ED4D23BAEE9CA6B82AC08B1 /* ImportedMovie.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = ImportedMovie.swift; sourceTree = "<group>"; };
 		887DEEAC97EF439987B3398E /* CameraFlowTests.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = CameraFlowTests.swift; sourceTree = "<group>"; };
 		9C60881CD54B2FD0544E8C62 /* Pocket03UITests.xctest */ = {isa = PBXFileReference; includeInIndex = 0; lastKnownFileType = wrapper.cfbundle; path = Pocket03UITests.xctest; sourceTree = BUILT_PRODUCTS_DIR; };
 		A59B31FD539DB4D812D1CE6E /* Pocket03Tests.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = Pocket03Tests.swift; sourceTree = "<group>"; };
+		AE511EA41903CFD4641976E4 /* VT323-Regular.ttf */ = {isa = PBXFileReference; lastKnownFileType = file; path = "VT323-Regular.ttf"; sourceTree = "<group>"; };
 		CA934C843F77B754A234071E /* Assets.xcassets */ = {isa = PBXFileReference; lastKnownFileType = folder.assetcatalog; path = Assets.xcassets; sourceTree = "<group>"; };
 		E42EF1A34581B21B6CB6046A /* Pocket03App.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = Pocket03App.swift; sourceTree = "<group>"; };
 		EFD289CFF5CD609B31330031 /* Pocket03.app */ = {isa = PBXFileReference; includeInIndex = 0; lastKnownFileType = wrapper.application; path = Pocket03.app; sourceTree = BUILT_PRODUCTS_DIR; };
 /* End PBXFileReference section */
 
 /* Begin PBXGroup section */
+		1303ABFBEB553EBE2FF1CF52 /* Fonts */ = {
+			isa = PBXGroup;
+			children = (
+				1E4D4E80A1C382A13F0929DB /* OFL.txt */,
+				AE511EA41903CFD4641976E4 /* VT323-Regular.ttf */,
+			);
+			path = Fonts;
+			sourceTree = "<group>";
+		};
 		7437EC319EEB2B3E7E874118 /* Pocket03 */ = {
 			isa = PBXGroup;
 			children = (
 				CA934C843F77B754A234071E /* Assets.xcassets */,
 				4D40D012811EAA05C05904D1 /* CameraEngine.swift */,
 				26C207B82BCBAF2B3A8EE76C /* CameraView.swift */,
-				2A29C285F0AF8F3DDDCFC8E2 /* GalleryView.swift */,
+				4ED4D23BAEE9CA6B82AC08B1 /* ImportedMovie.swift */,
+				342BFB412CD9209DBA23F2A5 /* Info.plist */,
 				08C4176DA0A36DE239B5FB7A /* MediaLibrary.swift */,
 				E42EF1A34581B21B6CB6046A /* Pocket03App.swift */,
 				371FE0D65E7AE9F89771BB9A /* RetroProcessor.swift */,
+				25F58C72C678675840B685DF /* VideoImporter.swift */,
+				1303ABFBEB553EBE2FF1CF52 /* Fonts */,
 			);
 			path = Pocket03;
 			sourceTree = "<group>";
@@ -199,6 +218,8 @@
 			buildActionMask = 2147483647;
 			files = (
 				E0F548C87D75E3F2BED159B7 /* Assets.xcassets in Resources */,
+				7CDBF75FF0BCD96D3DEDFE8B /* OFL.txt in Resources */,
+				E716F4C9A901EBCA72D2B960 /* VT323-Regular.ttf in Resources */,
 			);
 			runOnlyForDeploymentPostprocessing = 0;
 		};
@@ -219,10 +240,11 @@
 			files = (
 				236AEEA8D88E08DEDA050FF5 /* CameraEngine.swift in Sources */,
 				BE217A558D642742311F91BA /* CameraView.swift in Sources */,
-				AE58B05F3FC67A2118620FF4 /* GalleryView.swift in Sources */,
+				13C96601C175FE76046D67C5 /* ImportedMovie.swift in Sources */,
 				43AAD7C5779CA8B6181CA92A /* MediaLibrary.swift in Sources */,
 				2C5DF2604678F2015E3D69DC /* Pocket03App.swift in Sources */,
 				A9E0F9355B716C94DDC35F21 /* RetroProcessor.swift in Sources */,
+				EF2AF50472462525E2AE141D /* VideoImporter.swift in Sources */,
 			);
 			runOnlyForDeploymentPostprocessing = 0;
 		};
@@ -348,6 +370,7 @@
 				ASSETCATALOG_COMPILER_APPICON_NAME = AppIcon;
 				CODE_SIGN_IDENTITY = "iPhone Developer";
 				GENERATE_INFOPLIST_FILE = YES;
+				INFOPLIST_FILE = Pocket03/Info.plist;
 				INFOPLIST_KEY_CFBundleDisplayName = Pocket03;
 				INFOPLIST_KEY_NSCameraUsageDescription = "Pocket03 uses your camera to make low-resolution photos and silent videos.";
 				INFOPLIST_KEY_NSPhotoLibraryAddUsageDescription = "Save the photos and videos you choose to your photo library.";
@@ -387,6 +410,7 @@
 				ASSETCATALOG_COMPILER_APPICON_NAME = AppIcon;
 				CODE_SIGN_IDENTITY = "iPhone Developer";
 				GENERATE_INFOPLIST_FILE = YES;
+				INFOPLIST_FILE = Pocket03/Info.plist;
 				INFOPLIST_KEY_CFBundleDisplayName = Pocket03;
 				INFOPLIST_KEY_NSCameraUsageDescription = "Pocket03 uses your camera to make low-resolution photos and silent videos.";
 				INFOPLIST_KEY_NSPhotoLibraryAddUsageDescription = "Save the photos and videos you choose to your photo library.";

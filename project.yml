@@ -14,6 +14,10 @@ targets:
     type: application
     platform: iOS
     sources: [Pocket03]
+    info:
+      path: Pocket03/Info.plist
+      properties:
+        UIAppFonts: [VT323-Regular.ttf]
     settings:
       base:
         ASSETCATALOG_COMPILER_APPICON_NAME: AppIcon

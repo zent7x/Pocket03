@@ -2,16 +2,18 @@
 
 A native iPhone camera for small, imperfect memories. SwiftUI + AVFoundation + Core Image. iOS 17+, no external dependencies, accounts, analytics or network services.
 
-![Pocket03 camera](preview.png)
+![Pocket03 camera](preview-phone.png)
 
 ## Features
 
-- Live portrait 480 × 640 processing with four original treatments: Daydream, After Hours, Candy CCD and Mono 01.
-- Adjustable effect strength, highlight bloom, posterization, luminance grain, row banding and vignette.
-- Photo capture, front/back camera, torch and 1–4× digital zoom (hardware permitting).
-- Import a photo through Apple's picker, respecting image orientation.
-- Record filtered **silent** H.264 movies. Audio is intentionally absent and labeled in the camera and gallery.
-- Persistent local gallery, native sharing and explicit save to Photos.
+- A Series 40 style interface with pixel type, pale blue status/menu bars and **Gallery / Capture / Options** soft keys.
+- Three camera looks: **Dreamy (original)**, **Nokia 2630 (2007)** and **Siemens CX70 (2004)**. These are new approximations, not the original app's protected formulas.
+- Visible **Photo / Video / Import** workflow tabs. All three looks work with photos, recordings, imported photos and imported clips.
+- Portrait 480 × 640 output; adjustable strength, highlight bloom, posterization, grain, banding and vignette. The selected look and strength persist.
+- Front/back camera, torch and 1–4× zoom in Options → Settings (hardware permitting).
+- Photo imports preview before saving, and can switch looks and effect strength. Import accepts videos too, with processing progress and cancellation. Choose the look before opening a video; its processed copy is saved to the gallery.
+- Filtered **silent** H.264 movies for both recording and imported clips. Audio is intentionally absent and labeled in the interface.
+- A persistent phone-style gallery, native sharing and explicit save to Photos. Previous gallery entries remain readable.
 - A labeled generated landscape on the simulator; the physical iPhone uses its camera.
 
 ## Run
@@ -39,4 +41,8 @@ See [docs/reconstruction.md](docs/reconstruction.md). This is a new implementati
 
 ## Validation
 
-The project has simulator integration coverage for all treatment dimensions, zero-strength color preservation, bounded grain, EXIF rotation, photo persistence, corrupt-index protection, portrait silent-video output, and the photo → gallery → video → relaunch UI flow. Physical camera exposure, front-camera mirroring, torch, on-device performance, Photos permissions and external sharing need an actual iPhone check. The Photos picker selection gesture was not automated. App Store distribution is not configured.
+Eleven unit and integration tests and two end-to-end UI tests pass on the simulator. They cover all treatment dimensions, zero-strength color preservation, bounded grain, EXIF rotation, photo persistence, corrupt-index protection, storage-failure rollback, portrait silent-video output, imported-video frame preservation across all three looks, import cancellation with temporary-file cleanup, and the photo → gallery → video → relaunch UI flow. Physical camera exposure, front-camera mirroring, torch, on-device performance, Photos permissions and external sharing need an actual iPhone check. Photo picker interaction and physical permission prompts have separate manual validation boundaries; see `docs/validation.md`. App Store distribution is not configured.
+
+## Typography
+
+VT323 © 2011 The VT323 Project Authors (Peter Hull), distributed under the SIL Open Font License 1.1. The font and its full license are included in `Pocket03/Fonts/`. No font download is needed at runtime.

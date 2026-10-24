@@ -103,4 +103,137 @@ final class Pocket03Tests: XCTestCase {
         let audio = try await asset.loadTracks(withMediaType: .audio)
         XCTAssertTrue(audio.isEmpty)
     }
+    func testThreePrimaryLooksAndLegacyGalleryIdentifiers() throws {
+        XCTAssertEqual(Film.cameraLooks.map(\.rawValue), ["Dreamy (original)", "Nokia 2630 (2007)", "Siemens CX70 (2004)"])
+        XCTAssertEqual(try JSONDecoder().decode(Film.self, from: Data("\"DAYDREAM\"".utf8)), .daydream)
+        XCTAssertEqual(try JSONDecoder().decode(Film.self, from: Data("\"AFTER HOURS\"".utf8)), .dusk)
+        XCTAssertEqual(try JSONDecoder().decode(Film.self, from: Data("\"CANDY CCD\"".utf8)), .candy)
+        XCTAssertEqual(try JSONDecoder().decode(Film.self, from: Data("\"MONO 01\"".utf8)), .mono)
+    }
+    func testImportedVideoUsesEveryLookAndPreservesFrames() async throws {
+        let cg = try XCTUnwrap(RetroProcessor().process(RetroProcessor.demoScene(), film: .dreamy, strength: 0))
+        let source = try await FixtureMovie.write(frames: 8, image: cg)
+        defer { try? FileManager.default.removeItem(at: source) }
+        // FixtureMovie writes every frame it is handed, so the source count is exact rather
+        // than a function of machine load; the importer must then preserve exactly that count.
+        let originalFrames = try await frameCount(source)
+        XCTAssertEqual(originalFrames, 8)
+        for look in Film.cameraLooks {
+            let movie = try await VideoImporter().process(url: source, film: look, strength: 0.8) { _ in }
+            defer { try? FileManager.default.removeItem(at: movie.url) }
+            XCTAssertEqual(movie.thumbnail.size, CGSize(width: 480, height: 640))
+            let actualFrames = try await frameCount(movie.url)
+            XCTAssertEqual(actualFrames, originalFrames, "\(look.rawValue) did not preserve every frame")
+            let audio = try await AVURLAsset(url: movie.url).loadTracks(withMediaType: .audio)
+            XCTAssertTrue(audio.isEmpty)
+        }
+    }
+    func testCancelledImportStopsAndRemovesItsTemporaryFile() async throws {
+        let cg = try XCTUnwrap(RetroProcessor().process(RetroProcessor.demoScene(), film: .dreamy, strength: 0))
+        let source = try await FixtureMovie.write(frames: 48, image: cg)
+        defer { try? FileManager.default.removeItem(at: source) }
+        let before = Self.temporaryMovieNames()
+        let reported = expectation(description: "first progress report")
+        reported.assertForOverFulfill = false
+        let lock = NSLock()
+        var observed: [Double] = []
+        let task = Task {
+            try await VideoImporter().process(url: source, film: .nokia2630, strength: 0.8) { value in
+                lock.lock(); observed.append(value); lock.unlock()
+                reported.fulfill()
+            }
+        }
+        await fulfillment(of: [reported], timeout: 60)
+        task.cancel()
+        do {
+            let finished = try await task.value
+            try? FileManager.default.removeItem(at: finished.url)
+            XCTFail("The import completed before cancellation could be observed.")
+        } catch {
+            XCTAssertTrue(error is CancellationError, "expected cancellation, got \(error)")
+        }
+        lock.lock(); let values = observed; lock.unlock()
+        XCTAssertFalse(values.isEmpty)
+        XCTAssertTrue(values.allSatisfy { $0 >= 0 && $0 <= 1 }, "progress left 0...1: \(values)")
+        XCTAssertEqual(Self.temporaryMovieNames().subtracting(before), [], "a cancelled import left a temporary movie behind")
+    }
+    private static func temporaryMovieNames() -> Set<String> {
+        let names = try? FileManager.default.contentsOfDirectory(atPath: FileManager.default.temporaryDirectory.path)
+        return Set((names ?? []).filter { $0.hasSuffix(".mov") })
+    }
+    private func frameCount(_ url: URL) async throws -> Int {
+        let asset = AVURLAsset(url: url)
+        let tracks = try await asset.loadTracks(withMediaType: .video)
+        let track = try XCTUnwrap(tracks.first)
+        let size = try await track.load(.naturalSize)
+        XCTAssertEqual(size, CGSize(width: 480, height: 640))
+        let reader = try AVAssetReader(asset: asset)
+        let output = AVAssetReaderTrackOutput(track: track, outputSettings: [kCVPixelBufferPixelFormatTypeKey as String: kCVPixelFormatType_32BGRA])
+        reader.add(output)
+        XCTAssertTrue(reader.startReading())
+        var count = 0
+        while let sample = output.copyNextSampleBuffer() { if CMSampleBufferGetImageBuffer(sample) != nil { count += 1 } }
+        XCTAssertEqual(reader.status, .completed)
+        return count
+    }
+
+}
+
+// A deterministic movie fixture. The production SilentVideoWriter is a live-capture writer: it is
+// real-time and deliberately drops frames the encoder is not ready for, so the frame count it
+// actually writes varies with machine load. A fixture has to be exact, so this one is offline and
+// pull driven -- it hands over a frame only when the encoder asks for one, and never drops.
+enum FixtureMovie {
+    static func write(frames: Int, image: CGImage, fps: Int32 = 15) async throws -> URL {
+        let url = FileManager.default.temporaryDirectory.appendingPathComponent(UUID().uuidString + ".mov")
+        let writer = try AVAssetWriter(outputURL: url, fileType: .mov)
+        let input = AVAssetWriterInput(mediaType: .video, outputSettings: [
+            AVVideoCodecKey: AVVideoCodecType.h264, AVVideoWidthKey: 480, AVVideoHeightKey: 640])
+        input.expectsMediaDataInRealTime = false
+        let adaptor = AVAssetWriterInputPixelBufferAdaptor(assetWriterInput: input, sourcePixelBufferAttributes: [
+            kCVPixelBufferPixelFormatTypeKey as String: kCVPixelFormatType_32BGRA,
+            kCVPixelBufferWidthKey as String: 480, kCVPixelBufferHeightKey as String: 640,
+            kCVPixelBufferIOSurfacePropertiesKey as String: [:]])
+        guard writer.canAdd(input) else { throw CocoaError(.featureUnsupported) }
+        writer.add(input)
+        guard writer.startWriting() else { throw writer.error ?? CocoaError(.fileWriteUnknown) }
+        writer.startSession(atSourceTime: .zero)
+        let context = CIContext()
+        let source = CIImage(cgImage: image)
+        let queue = DispatchQueue(label: "studio.pocket03.fixture")
+        try await withCheckedThrowingContinuation { (continuation: CheckedContinuation<Void, Error>) in
+            var next = 0
+            var settled = false
+            input.requestMediaDataWhenReady(on: queue) {
+                while !settled && input.isReadyForMoreMediaData {
+                    guard next < frames else {
+                        settled = true
+                        input.markAsFinished()
+                        writer.finishWriting {
+                            if writer.status == .completed { continuation.resume() }
+                            else { continuation.resume(throwing: writer.error ?? CocoaError(.fileWriteUnknown)) }
+                        }
+                        return
+                    }
+                    do {
+                        guard let pool = adaptor.pixelBufferPool else { throw CocoaError(.fileWriteUnknown) }
+                        var buffer: CVPixelBuffer?
+                        guard CVPixelBufferPoolCreatePixelBuffer(nil, pool, &buffer) == kCVReturnSuccess,
+                              let buffer else { throw CocoaError(.fileWriteUnknown) }
+                        context.render(source, to: buffer)
+                        guard adaptor.append(buffer, withPresentationTime: CMTime(value: Int64(next), timescale: fps))
+                        else { throw writer.error ?? CocoaError(.fileWriteUnknown) }
+                        next += 1
+                    } catch {
+                        settled = true
+                        writer.cancelWriting()
+                        try? FileManager.default.removeItem(at: url)
+                        continuation.resume(throwing: error)
+                        return
+                    }
+                }
+            }
+        }
+        return url
+    }
 }
